@@ -109,6 +109,7 @@ sub SVNexport {
 	}
 	unless (system($cmd)) {
 		print "Export complete.\n";
+		system("cd ..;mv ".$branch." WebGUI") if ($branch);
 	} else {
 		print "Can't connect to repository.\n";
 		exit;
