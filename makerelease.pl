@@ -1,7 +1,6 @@
-#!/usr/bin/perl 
+#!/data/wre/prereqs/perl/bin/perl
 
-
-# Copyright 2001-2004 Plain Black LLC
+# Copyright 2001-2005 Plain Black Corporation
 # Licensed under the GNU GPL - http://www.gnu.org/licenses/gpl.html
 
 use Parse::PlainConfig;
@@ -13,12 +12,12 @@ use POSIX;
 our $version = "";
 our $buildDir = "/data/builds";
 our $generateCreateScript;
-our $mysql = "/usr/bin/mysql";
-our $mysqldump = "/usr/bin/mysqldump";
+our $mysql = "/data/wre/prereqs/mysql/bin/mysql";
+our $mysqldump = "/data/wre/prereqs/mysql/bin/mysqldump";
 our $mysqluser = "webguibuild";
 our $mysqlpass = "webguibuild";
 our $mysqldb = "webguibuild";
-our $perl = "/usr/bin/perl";
+our $perl = "/data/wre/prereqs/perl/bin/perl";
 our $branch = "";
 
 GetOptions(
@@ -38,10 +37,8 @@ GetOptions(
 
 if ($version ne "") {
 	createDirectory();
-	CVSexport();
+	SVNexport();
 	generateCreateScript();
-	removeUnnecessaryFiles();
-	system("mkdir ".$buildDir."/".$version."/WebGUI/www/uploads");
 	createTarGz();
 } else {
 	print <<STOP;
@@ -49,26 +46,26 @@ if ($version ne "") {
 
 	Options:
 
-	--branch		Specify a branch tag to check out from. Defaultly checks out from HEAD.
+	--branch		Specify a branch to check out from (like WebGUI_6.8). Defaultly checks out from HEAD.
 
-	--buildDir		The base directory to create all builds in. Defaults to /data/builds.
+	--buildDir		The base directory to create all builds in. Defaults to $buildDir.
 
 	--generateCreateScript	If specified a create script will be generated at build time by applying
 				all of the upgrades to "previousVersion.sql".
 
-	--makedocs		The path to the makedocs script. Defaults to /data/tools/makedocs.pl.
+	--makedocs		The path to the makedocs script. Defaults to $makedocs.
 
-	--mysql			The path to the mysql client. Defaults to /usr/bin/mysql.
+	--mysql			The path to the mysql client. Defaults to $mysql.
 
-	--mysqldb		The database to use to generate a create script. Defaults to webguibuild.
+	--mysqldb		The database to use to generate a create script. Defaults to $mysqldb.
 
-	--mysqldump		The path to the mysqldump client. Defaults to /usr/bin/mysqldump.
+	--mysqldump		The path to the mysqldump client. Defaults to $mysqldump.
 
-	--mysqlpass		The password for the mysql user. Defaults to webguibuild.
+	--mysqlpass		The password for the mysql user. Defaults to $mysqluser.
 
-	--mysqluser		A user with administrative privileges for mysql. Defaults to webguibuild.
+	--mysqluser		A user with administrative privileges for mysql. Defaults to $mysqlpass.
 
-	--perl			The path to the perl executable. Defaults to /usr/bin/perl.
+	--perl			The path to the perl executable. Defaults to $perl.
 
 	--version		The build version. Used to create folders and filenames.
 
@@ -85,21 +82,12 @@ sub generateCreateScript {
 	$auth .= " -p".$mysqlpass if ($mysqlpass);
 	system($mysql.$auth.' -e "create database '.$mysqldb.'"');
 	system($mysql.$auth.' --database='.$mysqldb.' < '.$buildDir."/".$version.'/WebGUI/docs/previousVersion.sql');
-	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit");
-	system($mysqldump.$auth.' '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
+	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
+	system($mysqldump.$auth.' --compatible=mysql323 --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 }
 
-
-sub removeUnnecessaryFiles {
-	print "Removing unnecessary files from the distribution.\n";
-	unlink($buildDir."/".$version."/WebGUI/docs/previousVersion.sql");
-	unlink($buildDir."/".$version."/WebGUI/docs/upgrades/upgrade_0.*");
-	unlink($buildDir."/".$version."/WebGUI/docs/upgrades/upgrade_1.*");
-	unlink($buildDir."/".$version."/WebGUI/docs/upgrades/upgrade_2.*");
-	print "Finished removing.\n";
-}
 
 sub createDirectory {
 	print "Creating build folder.\n";
@@ -111,11 +99,14 @@ sub createDirectory {
 	}
 }
 
-sub CVSexport {
+sub SVNexport {
 	print "Exporting latest version.\n";
-	my $cmd = "cd ".$buildDir."/".$version."; cvs export -D now ";
-	$cmd .= "-r ".$branch if ($branch);
-	$cmd .= " WebGUI";
+	my $cmd = "cd ".$buildDir."/".$version."; svn export ";
+	if ($branch) {
+		$cmd .= "https://svn.webgui.org/svnroot/branch/".$branch;
+	} else {
+		$cmd .= " https://svn.webgui.org/svnroot/WebGUI";
+	}
 	unless (system($cmd)) {
 		print "Export complete.\n";
 	} else {

@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/data/wre/prereqs/perl/bin/perl
 
 use Getopt::Long;
 use File::Path;
@@ -7,8 +7,6 @@ our $version = "";
 our $buildDir = "/data/builds";
 our $pbPublishDir = "/data/domains/plainblack.com/www/public/downloads";
 our $sfPublishServer = "upload.sf.net";
-our $sfPublishPath = "/incoming";
-our $ncftpput = "/usr/bin/ncftpput";
 
 GetOptions(
 	'version=s'=>\$version,
@@ -41,11 +39,11 @@ sub publishToPb {
 	print FILE $version;
 	close(FILE);
 	system("rm -f ".$pbPublishDir."/webgui-latest.tar.gz");
-	system("ln -s ".$pbPublishDir."/".$versions[0].".x.x/webgui-".$version.".tar.gz ".$pbPublishDir."/webgui-latest.tar.gz");
+	system("cd ".$pbPublishDir.";ln -s ".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
 }
 
 sub publishToSf {
 	print "Publishing version ".$version." to the Source Forge FTP server.\n";
-	system($ncftpput." ".$sfPublishServer." ".$sfPublishPath." ".$buildDir."/".$version."/webgui-".$version.".tar.gz");
+	system('/usr/bin/lftp -e "put -O incoming '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u anonymous,nopass ftp://'.$sfPublishServer);
 }
 
