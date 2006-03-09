@@ -3,7 +3,7 @@
 # Copyright 2001-2005 Plain Black Corporation
 # Licensed under the GNU GPL - http://www.gnu.org/licenses/gpl.html
 
-use Parse::PlainConfig;
+use JSON;
 use Getopt::Long;
 use File::Find;
 use File::Path;
@@ -75,17 +75,45 @@ STOP
 sub generateCreateScript {
 	return unless ($generateCreateScript);
 	print "Generating create script.\n";
-        my $config = Parse::PlainConfig->new('DELIM' => '=', 'FILE' => $buildDir."/".$version.'/WebGUI/etc/WebGUI.conf.original', 'PURGE' => 1);
-	$config->set(dsn=>"DBI:mysql:".$mysqldb, dbuser=>$mysqluser, dbpass=>$mysqlpass);
-        $config->write($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
+	my $fileContents;
+	open(FILE,"<".$buildDir."/".$version.'/WebGUI/etc/WebGUI.conf.original');
+	while (<FILE>) {
+		$fileContents .= $_ unless ($_ =~ /^\#/);
+	}	
+	close(FILE);
+	my $config = jsonToObj($fileContents);
+	$config->{dsn} = "DBI:mysql:".$mysqldb.";host=localhost";
+	$config->{dbuser} = $mysqluser;
+	$config->{dbpass} = $mysqlpass;
+	open(FILE, ">".$buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
+	print FILE "# config-file-type: JSON 1\n".objToJson($config);
+	close(FILE);
 	my $auth = " -u".$mysqluser;
 	$auth .= " -p".$mysqlpass if ($mysqlpass);
 	system($mysql.$auth.' -e "create database '.$mysqldb.'"');
 	system($mysql.$auth.' --database='.$mysqldb.' < '.$buildDir."/".$version.'/WebGUI/docs/previousVersion.sql');
+	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
-	system($mysqldump.$auth.' --compatible=mysql323 --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
+	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; /data/wre/prereqs/perl/bin/perl testCodebase.pl --configFile=webguibuild.conf >> /tmp/test.log 2>> /tmp/test.log';
+	system($cmd);
+	$message = "To: smoketest\@plainblack.com\n";
+	$message .= "From: jt\@plainblack.com\n";
+	$message .= "Subject: Smoke Test Results\n";
+	$message .= "\n";
+	open(FILE,"</tmp/test.log");
+	while (<FILE>) {
+		$message .= $_;
+	}
+	close(FILE);
+	if (open(MAIL,"| /usr/lib/sendmail -t -oi")) {
+		print MAIL $message;
+		close(MAIL);
+	}
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
+	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');
+	unlink('/tmp/test.log');
 }
 
 
