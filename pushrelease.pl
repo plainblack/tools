@@ -5,8 +5,6 @@ use File::Path;
 
 our $version = "";
 our $buildDir = "/data/builds";
-our $pbPublishDir = "/data/domains/plainblack.com/www/public/downloads";
-our $sfPublishServer = "upload.sf.net";
 
 GetOptions(
 	'version=s'=>\$version,
@@ -34,16 +32,16 @@ STOP
 sub publishToPb {
 	print "Publishing version ".$version." to the Plain Black web server.\n";
 	my @versions = split(/\./,$version);
-	system("cp -Rf ".$buildDir."/".$version."/webgui-".$version.".tar.gz ".$pbPublishDir."/".$versions[0].".x.x/");
-	open(FILE,">/data/domains/plainblack.com/www/public/downloads/latest-version.txt");
+	system("cp -Rf ".$buildDir."/".$version."/webgui-".$version.".tar.gz /data/domains/update.webgui.org/public/".$versions[0].".x.x/");
+	open(FILE,">/data/domains/update.webgui.org/public/latest-version.txt");
 	print FILE $version;
 	close(FILE);
-	system("rm -f ".$pbPublishDir."/webgui-latest.tar.gz");
-	system("cd ".$pbPublishDir.";ln -s ".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
+	system("rm -f /data/domains/plainblack.com/www/public/downloads/webgui-latest.tar.gz");
+	system("cd /data/domains/plainblack.com/www/public/downloads;ln -s /data/domains/update.webgui.org/public/".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
 }
 
 sub publishToSf {
 	print "Publishing version ".$version." to the Source Forge FTP server.\n";
-	system('/usr/bin/lftp -e "put -O incoming '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u anonymous,nopass ftp://'.$sfPublishServer);
+	system('/usr/bin/lftp -e "put -O incoming '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u anonymous,nopass ftp://upload.sf.net');
 }
 
