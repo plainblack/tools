@@ -58,7 +58,7 @@ sub buildFromDir {
                         print "Generating docs for ".$basedir."/".$dir."/".$file."\n";
                         system($pod2html." --quiet --css http://files.plainblack.com/downloads/builds/api.css --noindex ".$basedir."/".$dir."/".$file." > ".$outfile);
 		#	filterContent($outfile);
-                } elsif ($file ne "." && $file ne ".." && $file ne "Wobject" && $file ne "Authentication" && $file ne "Operation" && $file ne "Macro") {
+                } elsif ($file ne "." && $file ne "..") {
                         buildFromDir($dir."/".$file);
                 }
         }
