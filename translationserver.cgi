@@ -114,7 +114,7 @@ sub buildSiteFrames {
 sub buildURL {
  	my $op = shift;
  	my $params = shift;
- 	my $url = $ENV{SCRIPT_NAME}.'?op='.$op.';languageId='.$languageId;
+ 	my $url = '/?op='.$op.';languageId='.$languageId;
  	foreach my $param (keys %{$params}) {
  		$url .= ';'.$param.'='.uri_escape($params->{$param});
  	}
@@ -338,7 +338,12 @@ sub writeNamespace {
  
  #------------------------------------------------------
 sub www_displayMenu {
- 	my $output = '<a href="/" target="_top">HOME</a><br /><br /><a href="'.buildURL("exportTranslation").'" target="editor">Export '.$languageId.'</a><br /><a href="'.buildURL("editLanguage").'" target="editor">Edit '.$languageId.'</a><br /><br />';
+ 	my $output = '
+		<a href="/" target="_top">HOME</a><br /><br />
+		'.$languageId.'<br />
+		&bull; <a href="'.buildURL("editLanguage").'" target="editor">Edit</a><br />
+		&bull; <a href="'.buildURL("exportTranslation").'" target="editor">Export</a><br />
+		<br />';
  	my $namespaces = getNamespaces();
  	foreach my $namespace (@{$namespaces}) {
  		$output .= '<a href="'.buildURL("listItemsInNamespace",{namespace=>$namespace}).'" target="editor">'.$namespace.'</a><br />';
