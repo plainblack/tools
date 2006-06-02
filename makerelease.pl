@@ -95,7 +95,7 @@ sub generateCreateScript {
 	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
-	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; /data/wre/prereqs/perl/bin/perl testCodebase.pl --configFile=webguibuild.conf >> /tmp/test.log 2>> /tmp/test.log';
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; /data/wre/prereqs/perl/bin/perl testCodebase.pl --configFile=webguibuild.conf >> /tmp/test.log 2>> /tmp/test.log';
 	system($cmd);
 	$message = "To: smoketest\@plainblack.com\n";
 	$message .= "From: jt\@plainblack.com\n";

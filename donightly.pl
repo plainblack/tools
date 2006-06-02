@@ -5,4 +5,4 @@ $mon += 1;
 $mon = sprintf("%02d",$mon);
 $year = sprintf("%04d",$year);
 $mday = sprintf("%02d",$mday);
-system("/data/tools/makerelease.pl --version=nightly_".$year."-".$mon."-".$mday." --generateCreateScript;/data/tools/makedocs.pl --version=nightly_".$year."-".$mon."-".$mday);
+system("TEST_SYNTAX=1 /data/tools/makerelease.pl --version=nightly_".$year."-".$mon."-".$mday." --generateCreateScript;/data/tools/makedocs.pl --version=nightly_".$year."-".$mon."-".$mday);
