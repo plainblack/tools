@@ -1,0 +1,1 @@
+/data/domains/translation.webgui.org/public/index.cgi
