@@ -73,7 +73,7 @@ sub buildMainScreen {
 	closedir(DIR);
 	my $out = "<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend><ul>";
 	foreach my $file (@files) {
-		next if $file eq ".";
+		next if $file =~ m{\A\.};
 		next if $file eq "..";
 		next if $file =~ m/\.tar\.gz$/;
 		$languageId = $file;
@@ -101,7 +101,7 @@ sub buildSiteFrames {
     "http://www.w3.org/TR/html4/frameset.dtd">
  <html>
  <head><title>WebGUI Internationalization Editor</title></head>
- <frameset cols="200,*">
+ <frameset cols="300,*">
  <frame name="menu" src="'.buildURL("displayMenu").'">
  <frame name="editor" src="'.buildURL("editLanguage").'">
  </frameset>
@@ -207,6 +207,13 @@ sub header {
  $editor_page .= "		white-space: nowrap;\r\n";
  $editor_page .= "	}\r\n";
  $editor_page .= "	.outOfDate {\r\n";
+ $editor_page .= "		background-color: #ffff77;\r\n";
+ $editor_page .= "		font-weight: bold;\r\n";
+ $editor_page .= "	}\r\n";
+ $editor_page .= "	.allGood {\r\n";
+ $editor_page .= "		background-color: #aaffaa;\r\n";
+ $editor_page .= "	}\r\n";
+ $editor_page .= "	.undefined {\r\n";
  $editor_page .= "		background-color: #ffaaaa;\r\n";
  $editor_page .= "		font-weight: bold;\r\n";
  $editor_page .= "	}\r\n";
@@ -336,18 +343,49 @@ sub writeNamespace {
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm', $output);
  }
  
- #------------------------------------------------------
+#------------------------------------------------------
+sub www_commitTranslation {
+	chdir($outputPath);
+	my $out = `cd $outputPath;/usr/bin/svn update $languageId`;
+	my $rawChanges = `cd $outputPath;/usr/bin/svn status $languageId`;
+	my @changes = split m{\n}, $rawChanges;
+	foreach my $change (@changes) {
+		my ($type, $file) = split m{\s+}, $change;
+		if ($type eq "?") {
+			print "Adding ".$file."<br />";
+			system("cd $outputPath;/usr/bin/svn add $file");
+		} elsif ($type eq "M") {
+			print "Updating ".$file."<br />";
+		}
+	}
+	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn -m update_from_translation_server commit $languageId`.'</pre>';
+}
+
+#------------------------------------------------------
 sub www_displayMenu {
  	my $output = '
 		<a href="/" target="_top">HOME</a><br /><br />
 		'.$languageId.'<br />
 		&bull; <a href="'.buildURL("editLanguage").'" target="editor">Edit</a><br />
 		&bull; <a href="'.buildURL("exportTranslation").'" target="editor">Export</a><br />
-		<br />';
+		&bull; <a href="'.buildURL("commitTranslation").'" target="editor">Commit to SVN</a><br />
+		<br /><table>';
  	my $namespaces = getNamespaces();
  	foreach my $namespace (@{$namespaces}) {
- 		$output .= '<a href="'.buildURL("listItemsInNamespace",{namespace=>$namespace}).'" target="editor">'.$namespace.'</a><br />';
+ 		my $eng = getNamespaceItems($namespace);
+ 		my $lang = getNamespaceItems($namespace,$languageId);
+		my $total = 0;
+		my $ood = 0;
+ 		foreach my $tag (keys %{$eng}) {
+			$total++;
+ 			if ($lang->{$tag}{message} eq "" || $eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
+				$ood++;
+ 			}
+ 		}
+		my $percent = ($total > 0) ? sprintf('%.0f',(($total - $ood) / $total)*100) : 0;
+ 		$output .= '<tr><td class="'.(($percent == 0) ? 'undefined' : ($percent < 100) ? 'outOfDate' : 'allGood').'">'.$percent.'%</td><td><a href="'.buildURL("listItemsInNamespace",{namespace=>$namespace}).'" target="editor">'.$namespace.'</a></td><td>'.($total - $ood).'/'.$total.'</td></tr>';
  	}
+	$output .= '</table>';
  	return $output;
  }
  
@@ -379,7 +417,7 @@ sub www_editItem {
  #------------------------------------------------------
 sub www_editItemSave {
  	setNamespaceItems($cgi->param("namespace"),$cgi->param("tag"),$cgi->param("message"));
- 	return "Message saved.<p />".www_listItemsInNamespace();
+ 	return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
  }
  
  #------------------------------------------------------
@@ -438,12 +476,17 @@ sub www_listItemsInNamespace {
 	my $ood = 0;
  	foreach my $tag (sort keys %{$eng}) {
 		$total++;
- 		$output .= '<tr';
- 		if ($eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
+ 		$output .= '<tr class="';
+ 		if ($lang->{$tag}{message} eq "") {
 			$ood++;
- 			$output .= ' class="outOfDate"';
- 		}
- 		$output .= '><td><a href="'.buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$tag}).'">'.$tag.'</a></td><td>';
+ 			$output .= 'undefined';
+ 		} elsif ($eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
+			$ood++;
+ 			$output .= 'outOfDate';
+ 		} else {
+			$output .= 'allGood';
+		}
+ 		$output .= '"><td><a href="'.buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$tag}).'">'.$tag.'</a></td><td>';
  		if ($lang->{$tag} ne "") {
  			$output .= preview($lang->{$tag}{message});
  		} else {
@@ -452,7 +495,7 @@ sub www_listItemsInNamespace {
  		$output .= '</td></tr>';
  	}
  	$output .= '</table>';
-	$output = 'Status: '.sprintf('%.2f',(($total - $ood) / $total)*100).'% Complete<br />'.$output; 
+	$output = 'Status: '.sprintf('%.4f',(($total - $ood) / $total)*100).'% ('.($total - $ood).' / '.$total.') Complete  <br />'.$output; 
  	return $output;
  }
  
