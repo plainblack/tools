@@ -95,17 +95,18 @@ sub generateCreateScript {
 	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
-	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; /data/wre/prereqs/perl/bin/perl testCodebase.pl --configFile=webguibuild.conf >> /tmp/test.log 2>> /tmp/test.log';
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; /data/wre/prereqs/perl/bin/perl testCodebase.pl --coverage --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
 	system($cmd);
 	$message = "To: smoketest\@plainblack.com\n";
 	$message .= "From: jt\@plainblack.com\n";
 	$message .= "Subject: Smoke Test Results\n";
 	$message .= "\n";
-	open(FILE,"</tmp/test.log");
-	while (<FILE>) {
-		$message .= $_;
-	}
-	close(FILE);
+#	open(FILE,"<'.$buildDir."/".$version.'/test.log");
+#	while (<FILE>) {
+#		$message .= $_;
+#	}
+#	close(FILE);
+	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
 	if (open(MAIL,"| /usr/lib/sendmail -t -oi")) {
 		print MAIL $message;
 		close(MAIL);
@@ -113,7 +114,6 @@ sub generateCreateScript {
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');
-	unlink('/tmp/test.log');
 }
 
 
@@ -131,9 +131,9 @@ sub SVNexport {
 	print "Exporting latest version.\n";
 	my $cmd = "cd ".$buildDir."/".$version."; svn export ";
 	if ($branch) {
-		$cmd .= "https://svn.webgui.org/svnroot/branch/".$branch;
+		$cmd .= "https://svn.webgui.org/plainblack/branch/".$branch;
 	} else {
-		$cmd .= " https://svn.webgui.org/svnroot/WebGUI";
+		$cmd .= " https://svn.webgui.org/plainblack/WebGUI";
 	}
 	unless (system($cmd)) {
 		print "Export complete.\n";

@@ -13,6 +13,7 @@ GetOptions(
 
 
 if ($version ne "") {
+	createTag();
 	publishToPb();
 	publishToSf();
 } else {
@@ -28,6 +29,10 @@ if ($version ne "") {
 STOP
 }
 
+sub createTag {
+	print "Creating a release tag for ".$version." in subversion.\n";
+	system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/WebGUI https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+}
 
 sub publishToPb {
 	print "Publishing version ".$version." to the Plain Black web server.\n";

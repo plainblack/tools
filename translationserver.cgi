@@ -72,7 +72,7 @@ sub buildMainScreen {
 	my @files = readdir(DIR);
 	closedir(DIR);
 	my $out = "<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend><ul>";
-	foreach my $file (@files) {
+	foreach my $file (sort @files) {
 		next if $file =~ m{\A\.};
 		next if $file eq "..";
 		next if $file =~ m/\.tar\.gz$/;
