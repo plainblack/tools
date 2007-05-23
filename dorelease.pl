@@ -9,7 +9,7 @@ GetOptions(
 	'help'=>\$help,
 	);
 
-if ($help || $version!=~ m/\d\.\d\.\d\-\w+/) {
+if ($help || $version !~ m/\d+\.\d+\.\d+\-\w+/) {
 print <<STOP;
 
 usage $0 --version=7.3.18-stable
@@ -19,6 +19,7 @@ usage $0 --version=7.3.18-stable
 --version	the version we're releasing
 
 STOP
+	exit;
 }
 
-system("/data/tools/makerelease.pl --version=$version --generateCreateScript;/data/tools/makedocs.pl --version=$version");
+system("/data/tools/makerelease.pl --version=$version;/data/tools/makedocs.pl --version=$version");
