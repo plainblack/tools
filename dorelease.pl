@@ -3,10 +3,12 @@ use Getopt::Long;
 
 our $version = "";
 my $help;
+my $branch = "";
 
 GetOptions(
 	'version=s'=>\$version,
 	'help'=>\$help,
+	'branch=s'=>\$branch,
 	);
 
 if ($help || $version !~ m/\d+\.\d+\.\d+\-\w+/) {
@@ -22,4 +24,4 @@ STOP
 	exit;
 }
 
-system("/data/tools/makerelease.pl --version=$version;/data/tools/makedocs.pl --version=$version");
+system("/data/tools/makerelease.pl --version=$version;/data/tools/makedocs.pl --version=$version --branch=$branch");
