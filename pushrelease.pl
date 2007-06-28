@@ -5,10 +5,12 @@ use File::Path;
 
 our $version = "";
 our $buildDir = "/data/builds";
+our $branch = "";
 
 GetOptions(
 	'version=s'=>\$version,
-	'buildDir=s'=>\$buildDir
+	'buildDir=s'=>\$buildDir,
+	'buildDir=s'=>\$branch
 	);
 
 
@@ -22,6 +24,8 @@ if ($version ne "") {
 
 	Options:
 
+	--branch		If this release was from a branch, specify that here
+
 	--buildDir		The base directory to create all builds in. Defaults to /data/builds.
 
 	--version		The build version. Used to create folders and filenames.
@@ -31,7 +35,12 @@ STOP
 
 sub createTag {
 	print "Creating a release tag for ".$version." in subversion.\n";
-	system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/WebGUI https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+	if ($branch) {
+		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/branch/'.$branch.' https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+	}
+	else {
+		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/WebGUI https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+	}
 }
 
 sub publishToPb {
