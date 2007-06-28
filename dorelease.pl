@@ -16,6 +16,8 @@ print <<STOP;
 
 usage $0 --version=7.3.18-stable
 
+--branch	checks out from a branch rather than head
+
 --help		display this message
 
 --version	the version we're releasing
@@ -24,4 +26,4 @@ STOP
 	exit;
 }
 
-system("/data/tools/makerelease.pl --version=$version;/data/tools/makedocs.pl --version=$version --branch=$branch");
+system("/data/tools/makerelease.pl --version=$version --branch=$branch;/data/tools/makedocs.pl --version=$version");
