@@ -146,6 +146,7 @@ sub SVNexport {
 
 sub createTarGz {
         print "Creating webgui-".$version.".tar.gz distribution.\n";
+	unlink $buildDir."/".$version."/WebGUI/docs/previousVersion.sql";
         unless (system("cd ".$buildDir."/".$version."; tar cfz webgui-".$version.".tar.gz WebGUI")) {
                 print "File created.\n";
         } else {
