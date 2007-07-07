@@ -12,7 +12,7 @@ find(\&replaceCopyright, '/data/WebGUI');
 sub replaceCopyright {
 	my $extension = lc($_);
         $extension =~ s/.*\.(.*?)$/$1/;
-	if (isIn($extension, qw(txt pl pm css html js))) {
+	if (isIn($extension, qw(txt pl pm css html js t))) {
 		print "Processing ".$File::Find::name."\n";
 		my $file = readFile($File::Find::name);
 #print $file;
