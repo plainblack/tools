@@ -1,4 +1,4 @@
-#!/data/wre/prereqs/perl/bin/perl
+#!/data/wre/prereqs/bin/perl
 
 # Copyright 2001-2005 Plain Black Corporation
 # Licensed under the GNU GPL - http://www.gnu.org/licenses/gpl.html
@@ -12,12 +12,12 @@ use POSIX;
 our $version = "";
 our $buildDir = "/data/builds";
 our $generateCreateScript;
-our $mysql = "/data/wre/prereqs/mysql/bin/mysql";
-our $mysqldump = "/data/wre/prereqs/mysql/bin/mysqldump";
+our $mysql = "/data/wre/prereqs/bin/mysql";
+our $mysqldump = "/data/wre/prereqs/bin/mysqldump";
 our $mysqluser = "webguibuild";
 our $mysqlpass = "webguibuild";
 our $mysqldb = "webguibuild";
-our $perl = "/data/wre/prereqs/perl/bin/perl";
+our $perl = "/data/wre/prereqs/bin/perl";
 our $branch = "";
 
 GetOptions(
@@ -95,22 +95,22 @@ sub generateCreateScript {
 	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
-	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; /data/wre/prereqs/perl/bin/perl testCodebase.pl --coverage --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; '.$perl.' testCodebase.pl --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
 	system($cmd);
-	$message = "To: smoketest\@plainblack.com\n";
-	$message .= "From: jt\@plainblack.com\n";
-	$message .= "Subject: Smoke Test Results\n";
-	$message .= "\n";
+#	$message = "To: smoketest\@plainblack.com\n";
+#	$message .= "From: jt\@plainblack.com\n";
+#	$message .= "Subject: Smoke Test Results\n";
+#	$message .= "\n";
 #	open(FILE,"<'.$buildDir."/".$version.'/test.log");
 #	while (<FILE>) {
 #		$message .= $_;
 #	}
 #	close(FILE);
-	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
-	if (open(MAIL,"| /usr/lib/sendmail -t -oi")) {
-		print MAIL $message;
-		close(MAIL);
-	}
+#	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
+#	if (open(MAIL,"| /usr/lib/sendmail -t -oi")) {
+#		print MAIL $message;
+#		close(MAIL);
+#	}
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');

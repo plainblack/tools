@@ -1,4 +1,4 @@
-#!/data/wre/prereqs/perl/bin/perl
+#!/data/wre/prereqs/bin/perl
 our ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 $year += 1900;
 $mon += 1;
