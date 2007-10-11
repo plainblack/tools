@@ -3,7 +3,7 @@
 use strict;
 use CGI qw (:standart);
 use CGI::Carp qw (fatalsToBrowser);
-use Parse::PlainConfig;
+use Config::JSON;
 use URI::Escape;
 use Text::Iconv;
  
@@ -11,7 +11,7 @@ use Text::Iconv;
 my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
  
  
- my $config = Parse::PlainConfig->new('DELIM' => '=', 'FILE' => $wgi18neditRoot.'/etc/i18n.conf', 'PURGE' => 1);
+ my $config = Config::JSON->new($wgi18neditRoot.'/etc/i18n.conf');
  
  our $outputPath = $config->get("outputPath");
  our $webguiPath = $config->get("webguiPath");

@@ -50,8 +50,8 @@ sub publishToPb {
 	open(FILE,">/data/domains/update.webgui.org/public/latest-version.txt");
 	print FILE $version;
 	close(FILE);
-	system("rm -f /data/domains/plainblack.com/www/public/downloads/webgui-latest.tar.gz");
-	system("cd /data/domains/plainblack.com/www/public/downloads;ln -s /data/domains/update.webgui.org/public/".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
+	system("rm -f /data/domains/www.plainblack.com/public/downloads/webgui-latest.tar.gz");
+	system("cd /data/domains/www.plainblack.com/public/downloads;ln -s /data/domains/update.webgui.org/public/".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
 }
 
 sub publishToSf {
