@@ -8,6 +8,10 @@ use Getopt::Long;
 use File::Find;
 use File::Path;
 use POSIX;
+use lib '/data/WebGUI/lib';
+use WebGUI::Session;
+use WebGUI::Asset;
+
 
 our $version = "";
 our $buildDir = "/data/builds";
@@ -90,27 +94,29 @@ sub generateCreateScript {
 	close(FILE);
 	my $auth = " -u".$mysqluser;
 	$auth .= " -p".$mysqlpass if ($mysqlpass);
-	system($mysql.$auth.' -e "create database '.$mysqldb.'"');
+	system($mysql.$auth.' -e "drop database if exists '.$mysqldb.';create database '.$mysqldb.'"');
 	system($mysql.$auth.' --database='.$mysqldb.' < '.$buildDir."/".$version.'/WebGUI/docs/previousVersion.sql');
 	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
-	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment; '.$perl.' testCodebase.pl --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment.sh; '.$perl.' testCodebase.pl --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
 	system($cmd);
-#	$message = "To: smoketest\@plainblack.com\n";
-#	$message .= "From: jt\@plainblack.com\n";
-#	$message .= "Subject: Smoke Test Results\n";
-#	$message .= "\n";
-#	open(FILE,"<'.$buildDir."/".$version.'/test.log");
-#	while (<FILE>) {
-#		$message .= $_;
-#	}
-#	close(FILE);
-#	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
-#	if (open(MAIL,"| /usr/lib/sendmail -t -oi")) {
-#		print MAIL $message;
-#		close(MAIL);
-#	}
+	my $message = "";
+	open(FILE,"<",$buildDir."/".$version."/test.log");
+	while (<FILE>) {
+		$message .= $_;
+	}
+	close(FILE);
+	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
+	# smoke test asset id Ee_MmEX6_IFXhaZ13ZnAvg
+	my $session = WebGUI::Session->open("/data/WebGUI", "www.plainblack.com.conf");
+	my $cs = WebGUI::Asset->newByDynamicClass($session, "Ee_MmEX6_IFXhaZ13ZnAvg");
+	my $post  = $cs->addChild({
+		className	=> "WebGUI::Asset::Post::Thread",
+		title		=> "Smoketest For $version",
+		content		=> $message,
+		});
+	$post->commit;
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');
@@ -119,6 +125,9 @@ sub generateCreateScript {
 
 sub createDirectory {
 	print "Creating build folder.\n";
+	if (-d $buildDir."/".$version) {
+		system("rm -Rf ".$buildDir."/".$version);
+	}
 	unless (system("mkdir -p ".$buildDir."/".$version)) {
 		print "Folder created.\n";
 	} else {
