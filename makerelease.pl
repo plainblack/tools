@@ -11,7 +11,7 @@ use POSIX;
 use lib '/data/WebGUI/lib';
 use WebGUI::Session;
 use WebGUI::Asset;
-
+use WebGUI::VersionTag;
 
 our $version = "";
 our $buildDir = "/data/builds";
@@ -99,7 +99,7 @@ sub generateCreateScript {
 	system('cp '.$buildDir."/".$version.'/WebGUI/etc/log.conf.original '.$buildDir."/".$version.'/WebGUI/etc/log.conf');
 	system("cd ".$buildDir."/".$version.'/WebGUI/sbin;'.$perl." upgrade.pl --doit --mysql=$mysql --mysqldump=$mysqldump --skipBackup");
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
-	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment.sh; '.$perl.' testCodebase.pl --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
+	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment.sh; '.$perl.' testCodebase.pl --coverage --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
 	system($cmd);
 	my $message = "";
 	open(FILE,"<",$buildDir."/".$version."/test.log");
@@ -116,7 +116,8 @@ sub generateCreateScript {
 		title		=> "Smoketest For $version",
 		content		=> $message,
 		});
-	$post->commit;
+	my $versionTag = WebGUI::VersionTag->getWorking($session);
+	$versionTag->commit;
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');
