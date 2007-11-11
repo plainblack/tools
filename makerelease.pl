@@ -11,7 +11,6 @@ use POSIX;
 use lib '/data/WebGUI/lib';
 use WebGUI::Session;
 use WebGUI::Asset;
-use WebGUI::VersionTag;
 
 our $version = "";
 our $buildDir = "/data/builds";
@@ -116,8 +115,7 @@ sub generateCreateScript {
 		title		=> "Smoketest For $version",
 		content		=> $message,
 		});
-	my $versionTag = WebGUI::VersionTag->getWorking($session);
-	$versionTag->commit;
+	$post->postProcess;
 	system($mysql.$auth.' -e "drop database '.$mysqldb.'"');
 	unlink($buildDir."/".$version.'/WebGUI/etc/webguibuild.conf');
 	unlink($buildDir."/".$version.'/WebGUI/etc/log.conf');
