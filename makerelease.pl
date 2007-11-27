@@ -100,13 +100,15 @@ sub generateCreateScript {
 	system($mysqldump.$auth.' --compact '.$mysqldb.' > '.$buildDir."/".$version.'/WebGUI/docs/create.sql');
 	my $cmd = 'cd '.$buildDir."/".$version.'/WebGUI/sbin; . /data/wre/sbin/setenvironment.sh; '.$perl.' testCodebase.pl --coverage --configFile=webguibuild.conf >> '.$buildDir."/".$version.'/test.log 2>> '.$buildDir."/".$version.'/test.log';
 	system($cmd);
+	mkdir $buildDir."/".$version."/coverage";
+	system("/data/wre/prereqs/bin/cover -outputdir ".$buildDir."/".$version."/coverage/ /tmp/coverdb");
 	my $message = "";
 	open(FILE,"<",$buildDir."/".$version."/test.log");
 	while (<FILE>) {
 		$message .= $_;
 	}
 	close(FILE);
-	$message .= 'Smoke tests have completed. The results can be found here: <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a>';
+	$message .= 'Smoke tests have completed. The results can be found at <a href="http://www.plainblack.com/downloads/builds/'.$version.'/test.log">http://www.plainblack.com/downloads/builds/'.$version.'/test.log</a> and coverage results can be found at <a href="http://www.plainblack.com/downloads/builds/'.$version.'/coverage/">http://www.plainblack.com/downloads/builds/'.$version.'/coverage/</a>';
 	# smoke test asset id Ee_MmEX6_IFXhaZ13ZnAvg
 	my $session = WebGUI::Session->open("/data/WebGUI", "www.plainblack.com.conf");
 	my $cs = WebGUI::Asset->newByDynamicClass($session, "Ee_MmEX6_IFXhaZ13ZnAvg");
