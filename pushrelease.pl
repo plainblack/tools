@@ -10,7 +10,7 @@ our $branch = "";
 GetOptions(
 	'version=s'=>\$version,
 	'buildDir=s'=>\$buildDir,
-	'buildDir=s'=>\$branch
+	'branch=s'=>\$branch
 	);
 
 

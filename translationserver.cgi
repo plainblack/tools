@@ -76,8 +76,27 @@ sub buildMainScreen {
 		next if $file =~ m{\A\.};
 		next if $file eq "..";
 		next if $file =~ m/\.tar\.gz$/;
+		next if $file eq "servernames";
 		$languageId = $file;
-		$out .= '<li><a href="'.buildURL("buildSiteFrames").'">'.$file.'</a></li>';
+		$out .= '<li><a href="'.buildURL("buildSiteFrames").'">'.$file.'</a> (';
+
+		# calc percentages of completion
+               	my $total = 0;
+               	my $ood = 0;
+ 		my $namespaces = getNamespaces();
+        	foreach my $namespace (@{$namespaces}) {
+                	my $eng = getNamespaceItems($namespace);
+                	my $lang = getNamespaceItems($namespace,$languageId);
+                	foreach my $tag (keys %{$eng}) {
+                        	$total++;
+                        	if ($lang->{$tag}{message} eq "" || $eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
+                                	$ood++;
+                        	}
+                	}
+        	}
+               	my $percent = ($total > 0) ? sprintf('%.2f',(($total - $ood) / $total)*100) : 0;
+		$out .= $percent."% Complete)</li>";
+
 	}	
 	$out .= "</ul><b>NOTE:</b> The RedNeck language is there for demo purposes. You can use it to play around.</fieldset>";
 	$out .= <<STOP;
