@@ -94,11 +94,11 @@ sub buildMainScreen {
                         	}
                 	}
         	}
-               	my $percent = ($total > 0) ? sprintf('%.2f',(($total - $ood) / $total)*100) : 0;
+               	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
 		$out .= $percent."% Complete)</li>";
 
 	}	
-	$out .= "</ul><b>NOTE:</b> The RedNeck language is there for demo purposes. You can use it to play around.</fieldset>";
+	$out .= q|</ul><b>NOTE:</b> The <a href="/?op=buildSiteFrames;languageId=RedNeck">RedNeck</a> language is there for demo purposes. You can use it to play around.</fieldset>|;
 	$out .= <<STOP;
 	<br>
 	<fieldset>
