@@ -71,14 +71,14 @@ sub buildMainScreen {
 	opendir(DIR,$outputPath);
 	my @files = readdir(DIR);
 	closedir(DIR);
-	my $out = "<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend><ul>";
+	my $out = '<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend>';
 	foreach my $file (sort @files) {
 		next if $file =~ m{\A\.};
 		next if $file eq "..";
 		next if $file =~ m/\.tar\.gz$/;
 		next if $file eq "servernames";
 		$languageId = $file;
-		$out .= '<li><a href="'.buildURL("buildSiteFrames").'">'.$file.'</a> (';
+		$out .= '<form method="post" style="margin:0px"><input type="hidden" name="op" value="buildSiteFrames"><input type="hidden" name="languageId" value="'.$file.'"><input type="submit" value="edit"> '.$file.' (';
 
 		# calc percentages of completion
                	my $total = 0;
@@ -95,10 +95,10 @@ sub buildMainScreen {
                 	}
         	}
                	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
-		$out .= $percent."% Complete)</li>";
+		$out .= $percent."% Complete)</form>";
 
 	}	
-	$out .= q|</ul><b>NOTE:</b> The <a href="/?op=buildSiteFrames;languageId=RedNeck">RedNeck</a> language is there for demo purposes. You can use it to play around.</fieldset>|;
+	$out .= q|<p><b>NOTE:</b> The RedNeck language is there for demo purposes. You can use it to play around.</p></fieldset>|;
 	$out .= <<STOP;
 	<br>
 	<fieldset>
