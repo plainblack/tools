@@ -47,11 +47,17 @@ sub publishToPb {
 	print "Publishing version ".$version." to the Plain Black web server.\n";
 	my @versions = split(/\./,$version);
 	system("cp -Rf ".$buildDir."/".$version."/webgui-".$version.".tar.gz /data/domains/update.webgui.org/public/".$versions[0].".x.x/");
-	open(FILE,">/data/domains/update.webgui.org/public/latest-version.txt");
+	my $versionFile = "latest-version.txt";
+	if ( $version =~ /beta/) {
+		$versionFile = "latest-beta.txt";
+	}
+	else {
+		system("rm -f /data/domains/www.plainblack.com/public/downloads/webgui-latest.tar.gz");
+		system("cd /data/domains/www.plainblack.com/public/downloads;ln -s /data/domains/update.webgui.org/public/".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
+	}
+	open(FILE,">/data/domains/update.webgui.org/public/".$versionFile);
 	print FILE $version;
 	close(FILE);
-	system("rm -f /data/domains/www.plainblack.com/public/downloads/webgui-latest.tar.gz");
-	system("cd /data/domains/www.plainblack.com/public/downloads;ln -s /data/domains/update.webgui.org/public/".$versions[0].".x.x/webgui-".$version.".tar.gz webgui-latest.tar.gz");
 }
 
 sub publishToSf {
