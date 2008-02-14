@@ -316,7 +316,7 @@ sub writeFile {
          	print FILE $content;
          	close(FILE);
  	} else {
- 		print "ERROR writing file ".$filepath." because ".$1.".\n";
+ 		print "ERROR writing file ".$filepath." because ".$!.".\n";
  		exit;
  	}
  }
