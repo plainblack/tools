@@ -71,7 +71,7 @@ sub buildMainScreen {
 	opendir(DIR,$outputPath);
 	my @files = readdir(DIR);
 	closedir(DIR);
-	my $out = '<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend>';
+	my $out = '<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend><img src="/i18n.gif" align="right" border="0" alt="Translation Server" />';
 	foreach my $file (sort @files) {
 		next if $file =~ m{\A\.};
 		next if $file eq "..";
