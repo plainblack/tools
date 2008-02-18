@@ -418,7 +418,7 @@ sub www_editItem {
  	$output .= '>&nbsp;On&nbsp;&nbsp;/&nbsp;<input type="radio" name="editor_on" value="1"';
  if ($editor_on == 1) {$output .= ' checked';} else {$output .= " onClick=\"window.location.href='".buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$cgi->param("tag"),is_editor_on=>'1'})."'\"";}
  	$output .= '>&nbsp;Off&nbsp;</td></tr></form>';
- 	$output .= '<form method="post">';
+ 	$output .= '<form method="post" action="/#'.$cgi->param("tag").'">';
  	$output .= '<tr><th>Namespace</th><td>'.$cgi->param("namespace").'</td></tr>';
  	$output .= '<input type="hidden" name="languageId" value="'.$languageId.'">';
  	$output .= '<input type="hidden" name="namespace" value="'.$cgi->param("namespace").'">';
@@ -505,7 +505,7 @@ sub www_listItemsInNamespace {
  		} else {
 			$output .= 'allGood';
 		}
- 		$output .= '"><td><a href="'.buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$tag}).'">'.$tag.'</a></td><td>';
+ 		$output .= '"><td><a name="'.$tag.'" href="'.buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$tag}).'">'.$tag.'</a></td><td>';
  		if ($lang->{$tag} ne "") {
  			$output .= preview($lang->{$tag}{message});
  		} else {
