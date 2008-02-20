@@ -78,7 +78,7 @@ sub buildMainScreen {
 		next if $file =~ m/\.tar\.gz$/;
 		next if $file eq "servernames";
 		$languageId = $file;
-        $downloadUrl = buildURL('exportTranslation');
+         	my $downloadUrl = buildURL('exportTranslation');
 		$out .= '<form method="post" style="margin:0px"><input type="hidden" name="op" value="buildSiteFrames"><input type="hidden" name="languageId" value="'.$file.'"><a href="'.$downloadUrl.'">Download</a>&nbsp;<input type="submit" value="edit"> '.$file.' (';
 
 		# calc percentages of completion
