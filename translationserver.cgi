@@ -392,6 +392,7 @@ sub www_displayMenu {
 		&bull; <a href="'.buildURL("editLanguage").'" target="editor">Edit</a><br />
 		&bull; <a href="'.buildURL("exportTranslation").'" target="editor">Export</a><br />
 		&bull; <a href="'.buildURL("commitTranslation").'" target="editor">Commit to SVN</a><br />
+		&bull; <a href="'.buildURL("translatorsNotes").'" target="editor">Translators Notes</a><br />
 		<br /><table>';
  	my $namespaces = getNamespaces();
  	foreach my $namespace (@{$namespaces}) {
@@ -522,6 +523,28 @@ sub www_listItemsInNamespace {
  	return $output;
  }
  
+ #------------------------------------------------------
+sub www_translatorsNotes {
+	open (my $notesFile, "<", $outputPath.'/'.$languageId.'/notes.txt');
+	my $notes = join("\n", <$notesFile>);
+	close($notesFile);
+ 	my $output = '<form method="post"><table width="95%">';
+ 	$output .= '<input type="hidden" name="languageId" value="'.$languageId.'">';
+ 	$output .= '<input type="hidden" name="op" value="translatorsNotesSave">';
+  	$output .= '<th></th><td width="100%"><textarea style="width: 100%;" rows="40" name="notes">'.$notes.'</textarea><br />Place any notes of interest here including common dictionary terms, translation notes, and a list of people who worked on this translation. This text will go into the translation distribution, but will not be displayed anywhere on the site, or affect system performance.</td></tr>';
+ 	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
+ 	$output .= '</table></form>';
+ 	return $output;
+ }
+ 
+ #------------------------------------------------------
+sub www_translatorsNotesSave {
+	open(my $notesFile, ">", $outputPath.'/'.$languageId.'/notes.txt');
+	print {$notesFile} $cgi->param("notes")."\n";
+	close($notesFile);
+ 	return "Notes saved.<p>".www_translatorsNotes();
+ }
+
 #------------------------------------------------------
 sub ReadTranslit {
  my $translit_replaces_read = '';
