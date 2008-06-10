@@ -96,7 +96,7 @@ sub buildMainScreen {
                 	}
         	}
                	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
-		$out .= $percent."% Complete)</form>";
+		$out .= $percent."% Complete)</form>\n";
 
 	}	
 	$out .= q|<p><b>NOTE:</b> The RedNeck language is there for demo purposes. You can use it to play around.</p></fieldset>|;
@@ -115,8 +115,14 @@ STOP
 } 
  
  #------------------------------------------------------
+
+sub languageIdIsBad {
+	return ($languageId =~ m/English|\s+/ || $languageId !~ m/^[A-Z]/);
+}
+
+ #------------------------------------------------------
 sub buildSiteFrames {
-	if ($languageId =~ m/English|\s+/ || $languageId !~ m/^[A-Z]/) {
+	if (languageIdIsBad()) {
 		return buildMainScreen();
 	}
  	my $output = ' 
@@ -386,6 +392,9 @@ sub www_commitTranslation {
 
 #------------------------------------------------------
 sub www_displayMenu {
+	if (languageIdIsBad()) {
+		return '';
+	}
  	my $output = '
 		<a href="/" target="_top">HOME</a><br /><br />
 		'.$languageId.'<br />
@@ -446,6 +455,9 @@ sub www_editItemSave {
  
  #------------------------------------------------------
 sub www_editLanguage {
+	if (languageIdIsBad()) {
+		return '';
+	}
  	my $lang = getLanguage();
  	my $output = '<form method="post"><table width="95%">';
  	$output .= '<input type="hidden" name="languageId" value="'.$languageId.'">';
@@ -484,8 +496,11 @@ sub www_editLanguageSave {
 
 #------------------------------------------------------
 sub www_exportTranslation {
+	if (languageIdIsBad()) {
+		return '';
+	}
 	chdir($outputPath);
-	system("tar cfz ".$languageId.".tar.gz ".$languageId);
+	system("tar cfz ".$languageId.".tar.gz --exclude=.svn ".$languageId);
 	return '<a href="/translations/'.$languageId.'.tar.gz">Download '.$languageId.'.tar.gz</a>';
 }
 
