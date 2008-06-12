@@ -2,12 +2,12 @@
 use strict;
 use warnings;
 
-our $VERSION = '0.2.0';
+our $VERSION = '0.1.1';
 
 use Getopt::Long ();
 use Pod::Usage;
 
-my $opt_verbose = 0;
+my $opt_verbose = 1;
 Getopt::Long::Configure(qw(gnu_getopt));
 Getopt::Long::GetOptions(
     'h|?|help'      => \(my $opt_help),
@@ -20,6 +20,7 @@ Getopt::Long::GetOptions(
 
     'f|fast'        => \(my $opt_fast),
 
+    'B|backup'      => \(my $opt_backup),
     'i|index!'      => \(my $opt_index),
     'up|upgrade!'   => \(my $opt_upgrade),
     'upload!'       => \(my $opt_upload),
@@ -27,6 +28,7 @@ Getopt::Long::GetOptions(
     'v|verbose'     => sub { $opt_verbose++ },
     'q|quiet'       => sub { $opt_verbose-- },
 
+    'import!'       => \(my $opt_import),
     'debug!'        => \(my $opt_debug),
     'starter!'      => \(my $opt_starter),
     'clear!'        => \(my $opt_clear),
@@ -40,10 +42,12 @@ elsif ($opt_man) {
     pod2usage(-verbose => 2);
 }
 elsif ($opt_ver) {
-    print "wg_reset - version $VERSION\n";
+    print "wg-reset - version $VERSION\n";
     exit;
 }
 
+$opt_import     = defined $opt_import       ? $opt_import
+                                            : 1;
 if ($opt_build) {
     $opt_dev        = defined $opt_dev          ? $opt_dev          : 0;
     $opt_verbose++;
@@ -53,6 +57,9 @@ elsif ($opt_test) {
     $opt_upgrade    = defined $opt_upgrade      ? $opt_upgrade      : 0;
 }
 
+$opt_fast       = defined $opt_fast         ? $opt_fast
+                : !$opt_import              ? 1
+                                            : 0;
 $opt_dev        = defined $opt_dev          ? $opt_dev          : 1;
 $opt_upgrade    = defined $opt_upgrade      ? $opt_upgrade      : 1;
 $opt_upload     = defined $opt_upload       ? $opt_upload
@@ -60,6 +67,9 @@ $opt_upload     = defined $opt_upload       ? $opt_upload
                                             : 1;
 $opt_delcache   = defined $opt_delcache     ? $opt_delcache
                 : $opt_fast                 ? 0
+                                            : 1;
+
+$opt_backup     = $opt_fast                 ? 0
                                             : 1;
 
 $opt_starter    = defined $opt_starter      ? $opt_starter
@@ -81,6 +91,7 @@ unshift @INC, '/data/wre/lib';
 require WRE::Config;
 require Config::JSON;
 require DBI;
+require File::Spec;
 
 $| = 1;
 
@@ -90,9 +101,16 @@ my $config_file = (shift @ARGV) || $ENV{WEBGUI_CONFIG} || die <<'END_ERROR';
 You must set the WEBGUI_CONFIG environment variable or provide a parameter to determine which site to reset
 END_ERROR
 print "Loading config... " if $opt_verbose >= 1;
-my $config = Config::JSON->new($wg_root . '/etc/' . $config_file);
+$config_file = File::Spec->rel2abs($config_file, $wg_root . '/etc');
+my $config = Config::JSON->new($config_file);
 my ($dsn, $db_name, $db_host, $db_port, $db_user, $db_pass) = get_db_info($config);
 print "Done.\n" if $opt_verbose >= 1;
+
+if ($opt_backup) {
+    print "Backing up current database... " if $opt_verbose >= 1;
+    system('mysqldump', "-h$db_host", "-P$db_port", $db_name, "-u$db_user", "-p$db_pass", "-r/tmp/WebGUI-reset-backup.sql");
+    print "Done.\n" if $opt_verbose >= 1;
+}
 
 # Clear cache
 if ($opt_delcache) {
@@ -105,7 +123,6 @@ if ($opt_delcache) {
         # We'd clear the DB cache here, but the whole database will be cleared in a later step
     }
     print "Done.\n" if $opt_verbose >= 1;
-    
 }
 # Clear and recreate uploads
 if ($opt_upload) {
@@ -138,22 +155,24 @@ if ($opt_upload) {
     print "Done\n" if $opt_verbose >= 1;
 }
 
-# Connect using dsn and clean out old tables
-print "Clearing old database information... " if $opt_verbose >= 1;
-my $dbh = DBI->connect($dsn, $db_user, $db_pass);
-my $sth = $dbh->table_info(undef, undef, '%');
-my @tables = map {@$_} @{$sth->fetchall_arrayref([2])};
-for my $table (@tables) {
-    $dbh->do('DROP TABLE ' . $dbh->quote_identifier($table));
-}
-$dbh->disconnect;
-print "Done.\n" if $opt_verbose >= 1;
+if ($opt_import) {
+    # Connect using dsn and clean out old tables
+    print "Clearing old database information... " if $opt_verbose >= 1;
+    my $dbh = DBI->connect($dsn, $db_user, $db_pass);
+    my $sth = $dbh->table_info(undef, undef, '%');
+    my @tables = map {@$_} @{$sth->fetchall_arrayref([2])};
+    for my $table (@tables) {
+        $dbh->do('DROP TABLE ' . $dbh->quote_identifier($table));
+    }
+    $dbh->disconnect;
+    print "Done.\n" if $opt_verbose >= 1;
 
-# If we aren't upgrading, we're using the current DB version
-print "Importing clean database dump... " if $opt_verbose >= 1;
-my $db_file = $opt_upgrade ? 'previousVersion.sql' : 'create.sql';
-system('mysql', "-h$db_host", "-P$db_port", $db_name, "-u$db_user", "-p$db_pass", "--batch", "--execute=source $wg_root/docs/$db_file");
-print "Done.\n" if $opt_verbose >= 1;
+    # If we aren't upgrading, we're using the current DB version
+    print "Importing clean database dump... " if $opt_verbose >= 1;
+    my $db_file = $opt_upgrade ? 'previousVersion.sql' : 'create.sql';
+    system('mysql', "-h$db_host", "-P$db_port", $db_name, "-u$db_user", "-p$db_pass", "--batch", "--execute=source $wg_root/docs/$db_file");
+    print "Done.\n" if $opt_verbose >= 1;
+}
 
 # Run the upgrade in a fork
 if ($opt_upgrade) {
@@ -168,8 +187,24 @@ if ($opt_upgrade) {
         exit;
     }
     waitpid $pid, 0;
+    if ($?) {
+        die "Upgrade failed!\n";
+    }
     print "Done.\n" if $opt_verbose >= 1;
 }
+
+print "Finding current version number... " if $opt_verbose >= 1;
+my $dbh = DBI->connect($dsn, $db_user, $db_pass);
+my $sth = $dbh->prepare('SELECT webguiVersion FROM webguiVersion');
+$sth->execute;
+my @versions =
+    map { $_->[0] }
+    sort { $a->[1] <=> $b->[1]}
+    map { [$_, version->new($_)] }
+    map {@$_} @{$sth->fetchall_arrayref([0])};
+$sth->finish;
+my $version = pop @versions;
+print "$version. Done.\n" if $opt_verbose >= 1;
 
 if (defined $opt_debug || defined $opt_starter) {
     print "Setting WebGUI settings... " if $opt_verbose >= 1;
@@ -225,13 +260,14 @@ if ($opt_purge) {
 END_SQL
     $sth->execute;
     while (my ($id, $class, $version) = $sth->fetchrow_array) {
-        if (WebGUI::Asset->getCurrentRevisionDate($wg_session, $id) == $version) {
+        my $current_version = WebGUI::Asset->getCurrentRevisionDate($wg_session, $id);
+        if (!defined $current_version || $current_version == $version) {
             next;
         }
         my $asset = WebGUI::Asset->new($wg_session, $id, $class, $version)
             || next;
         if ($asset->getRevisionCount("approved") > 1) {
-            print "\tPurging $class $version '" . $asset->get('title') . "'\n" if $opt_verbose >= 2;
+            print sprintf("\tPurging \%-35s \%s '\%s'\n", $class, $version, $asset->get('title')) if $opt_verbose >= 2;
             $asset->purgeRevision;
         }
     }
@@ -243,14 +279,15 @@ if ($opt_cleantags) {
     my $tag_id = 'pbversion0000000000001';
     my $sth = $dbh->prepare("UPDATE assetData SET tagId = ?");
     $sth->execute($tag_id);
-    #$sth = $dbh->prepare("DELETE FROM assetVersionTag WHERE tagId <> ?");
-    #$sth->execute($tag_id);
     $sth = $dbh->prepare("DELETE FROM assetVersionTag");
     $sth->execute();
-    $sth = $dbh->prepare("INSERT INTO assetVersionTag VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    $sth->execute($tag_id, 'Initial Install', 1, time(), '3', time(), '3', 0, '', '3', '', undef, undef);
-    #$sth = $dbh->prepare("UPDATE assetVersionTag SET name = 'Initial Install', creationDate = ?, commitDate = ? WHERE tagId = ?");
-    #$sth->execute(time(), time(), $tag_id);
+    $sth = $dbh->prepare(<<'END_SQL');
+INSERT INTO `assetVersionTag`
+    (tagId, name, isCommitted, creationDate, createdBy, commitDate,
+    committedBy, isLocked, lockedBy, groupToUse, workflowId)
+VALUES (?,?,?,?,?,?,?,?,?,?,?)
+END_SQL
+    $sth->execute($tag_id, "Base $version Install", 1, time(), '3', time(), '3', 0, '', '3', '');
     print "Done.\n" if $opt_verbose >= 1;
 }
 
@@ -323,7 +360,8 @@ sub wg_session {
     unshift @INC, $wg_root . '/lib';
     require WebGUI::Session;
     require WebGUI::Asset;
-    my $wg_session = WebGUI::Session->open($wg_root, $config_file);
+    $wg_config = File::Spec->abs2rel($wg_config, $wg_root . '/etc');
+    my $wg_session = WebGUI::Session->open($wg_root, $wg_config);
     $wg_session->user({userId => 3});
     return $wg_session;
 }
@@ -332,11 +370,11 @@ __END__
 
 =head1 NAME
 
-wg_reset - Resets a WebGUI site to the default
+wg-reset - Resets a WebGUI site to the default
 
 =head1 SYNOPSIS
 
-wg_reset [options] [config ...]
+wg-reset [options] [config ...]
 
 Options:
     --help          brief help message
@@ -358,7 +396,7 @@ Prints the manual page and exits.
 
 =head1 DESCRIPTION
 
-B<wg_reset> will recreate a WebGUI site from the startup database script. This
+B<wg-reset> will recreate a WebGUI site from the startup database script. This
 includes running upgrade scripts as needed and recreating the uploads directory.
 There are also options for setting various options useful for development and
 creating a new database import script.
