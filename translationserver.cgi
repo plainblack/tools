@@ -299,11 +299,11 @@ sub setNamespaceItems {
  	my $eng = getNamespaceItems($namespace);
  	my $lang = getNamespaceItems($namespace,$languageId);
  	$lang->{$tag}{message} = $message;
- 	$lang->{$tag}{message} =~ s/\|/\\\|/g;
  	$lang->{$tag}{lastUpdated} = time();
+    # Get rid of $VAR1 prefix
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::SortKeys = 1;
  	my $output = Dumper $lang;
-        # Remove the '$VAR1 =' that Dumper produces
-        $output     =~ s/^\$VAR1\s+=//;
  	writeNamespace($namespace,$output);
  }
  
@@ -361,11 +361,11 @@ sub writeLanguage {
  #------------------------------------------------------
 sub writeNamespace {
  	my $namespace = shift;
- 	my $data = shift;
+ 	my $data = shift || '{}';
  	my $output = "package WebGUI::i18n::".$languageId."::".$namespace.";\n\n";
  	$output .= "our \$I18N = ";
  	$output .= $data;
- 	$output .= "\n\n1;\n";
+ 	$output .= ";\n\n1;\n";
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm', $output);
  }
  
