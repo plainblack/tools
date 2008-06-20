@@ -6,6 +6,7 @@ use CGI::Carp qw (fatalsToBrowser);
 use Config::JSON;
 use URI::Escape;
 use Text::Iconv;
+use Data::Dumper;
  
  #-----main----------------
 my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
@@ -300,13 +301,9 @@ sub setNamespaceItems {
  	$lang->{$tag}{message} = $message;
  	$lang->{$tag}{message} =~ s/\|/\\\|/g;
  	$lang->{$tag}{lastUpdated} = time();
- 	my $output;
- 	foreach my $tag (keys %{$eng}) {
- 		$output .= "\t'".$tag."' => {\n";
-        	        $output .= "\t\tmessage => ".'q|'.$lang->{$tag}{message}."|,\n";
-                 $output .= "\t\tlastUpdated => ".$lang->{$tag}{lastUpdated};
-                 $output .= "\n\t},\n\n";
- 	}
+ 	my $output = Dumper $lang;
+        # Remove the '$VAR1 =' that Dumper produces
+        $output     =~ s/^\$VAR1\s+=//;
  	writeNamespace($namespace,$output);
  }
  
@@ -366,9 +363,9 @@ sub writeNamespace {
  	my $namespace = shift;
  	my $data = shift;
  	my $output = "package WebGUI::i18n::".$languageId."::".$namespace.";\n\n";
- 	$output .= "our \$I18N = {\n";
+ 	$output .= "our \$I18N = ";
  	$output .= $data;
- 	$output .= "};\n\n1;\n";
+ 	$output .= "\n\n1;\n";
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm', $output);
  }
  
