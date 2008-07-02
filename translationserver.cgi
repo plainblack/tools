@@ -19,7 +19,6 @@ my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
  our $editor_lang = $config->get("editor_lang");
  our $extras_url = $config->get("extras_url");
  
- 
  $|=1; # disable output buffer
  our $cgi = CGI->new;
  our $languageId = $cgi->param("languageId");
@@ -333,7 +332,8 @@ sub writeLanguage {
  	my $data = shift;
 	my $translit_replaces_r = shift;
  	my $output = "package WebGUI::i18n::".$languageId.";\n\n";
- 	$output .= "use strict;\n\n";
+ 	$output .= "use strict;\n";
+ 	$output .= "use utf8;\n\n";
  	$output .= "our \$LANGUAGE = {\n";
  	$output .= $data;
  	$output .= "};\n\n";
@@ -362,7 +362,7 @@ sub writeLanguage {
 sub writeNamespace {
  	my $namespace = shift;
  	my $data = shift || '{}';
- 	my $output = "package WebGUI::i18n::".$languageId."::".$namespace.";\n\n";
+ 	my $output = "package WebGUI::i18n::".$languageId."::".$namespace.";\nuse utf8;\n";
  	$output .= "our \$I18N = ";
  	$output .= $data;
  	$output .= ";\n\n1;\n";
