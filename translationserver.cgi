@@ -1,12 +1,12 @@
 #!/data/wre/prereqs/bin/perl
  
 use strict;
-use CGI qw (:standart);
+use CGI;
 use CGI::Carp qw (fatalsToBrowser);
 use Config::JSON;
 use URI::Escape;
-use Text::Iconv;
 use Data::Dumper;
+use Encode qw(decode_utf8);
  
  #-----main----------------
 my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
@@ -18,7 +18,11 @@ my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
  our $webguiPath = $config->get("webguiPath");
  our $editor_lang = $config->get("editor_lang");
  our $extras_url = $config->get("extras_url");
- 
+ our $svn_user = $config->get("svn_user");
+ our $svn_pass = $config->get("svn_pass");
+
+ binmode(STDOUT, ":utf8");
+
  $|=1; # disable output buffer
  our $cgi = CGI->new;
  our $languageId = $cgi->param("languageId");
@@ -152,13 +156,13 @@ sub buildURL {
  
  #------------------------------------------------------
 sub fixFormData {
-         my $value = shift;
-         $value =~ s/\"/\&quot\;/g;
-         $value =~ s/\&/\&amp\;/g;
-         $value =~ s/\</\&lt\;/g;
-         $value =~ s/\>/\&gt\;/g;
-         return $value;
- }
+    my $value = shift;
+    $value =~ s/\&/\&amp\;/g;
+    $value =~ s/\"/\&quot\;/g;
+    $value =~ s/\</\&lt\;/g;
+    $value =~ s/\>/\&gt\;/g;
+    return $value;
+}
  
  #------------------------------------------------------
 sub footer {
@@ -201,18 +205,17 @@ sub getNamespaceItems {
  
  #------------------------------------------------------
 sub getNamespaces {
- 	opendir (DIR,$webguiPath.'/lib/WebGUI/i18n/English/');
-        	my @files = readdir(DIR);
-        	closedir(DIR);
- 	@files = sort @files;
- 	my @namespaces;
-        	foreach my $file (@files) {
-                	if ($file =~ /(.*?)\.pm$/) {
- 			push(@namespaces,$1);
-                	}
-        	}
- 	return \@namespaces;
- }
+    opendir (my $dh, $webguiPath.'/lib/WebGUI/i18n/English/');
+    my @files = sort readdir($dh);
+    closedir($dh);
+    my @namespaces;
+    foreach my $file (@files) {
+        if ($file =~ /(.*?)\.pm$/) {
+            push(@namespaces,$1);
+        }
+    }
+    return \@namespaces;
+}
  
  #------------------------------------------------------
 sub header {
@@ -283,10 +286,15 @@ sub setLanguage {
 	my $translit = shift;
 	my $languageAbbreviation = shift;
 	my $locale = shift;
- 	my $output = "\tlabel => '".$label."',\n";
- 	$output .= "\ttoolbar => '".$toolbar."',\n";
- 	$output .= "\tlanguageAbbreviation => '".$languageAbbreviation."',\n";
- 	$output .= "\tlocale => '".$locale."',\n";
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::SortKeys = 1;
+    local $Data::Dumper::Indent = 1;
+    my $output = Dumper({
+        label                   => $label,
+        toolbar                 => $toolbar,
+        languageAbbreviation    => $languageAbbreviation,
+        locale                  => $locale,
+    });
  	writeLanguage($output, $translit);
  }
  
@@ -302,58 +310,60 @@ sub setNamespaceItems {
     # Get rid of $VAR1 prefix
     local $Data::Dumper::Terse = 1;
     local $Data::Dumper::SortKeys = 1;
- 	my $output = Dumper $lang;
+    local $Data::Dumper::Indent = 1;
+    my $output = Dumper($lang);
  	writeNamespace($namespace,$output);
  }
  
  #------------------------------------------------------
 sub writeFile {
-         my $filepath = shift;
-         my $content = shift;
-         my $mkdir = substr($filepath,1,(length($filepath)-1));
-         my @path = split("\/",$mkdir);
-         $mkdir = "";
-         foreach my $part (@path) {
-                 next if ($part =~ /\.pm/);
-                 $mkdir .= "/".$part;
-                 mkdir($mkdir);
-         }
-         if (open(FILE,">".$filepath)) {
-         	print FILE $content;
-         	close(FILE);
- 	} else {
- 		print "ERROR writing file ".$filepath." because ".$!.".\n";
- 		exit;
- 	}
- }
+    my $filepath = shift;
+    my $content = shift;
+    my $mkdir = substr($filepath,1,(length($filepath)-1));
+    my @path = split("\/",$mkdir);
+    $mkdir = "";
+    foreach my $part (@path) {
+        next if ($part =~ /\.pm/);
+        $mkdir .= "/".$part;
+        mkdir($mkdir);
+    }
+    if (open(my $fh,">:utf8", $filepath)) {
+        print {$fh} $content;
+        close($fh);
+    }
+    else {
+        print "ERROR writing file ".$filepath." because ".$!.".\n";
+        exit;
+    }
+}
  
  #------------------------------------------------------
 sub writeLanguage {
- 	my $data = shift;
+    my $data = shift || '{}';
 	my $translit_replaces_r = shift;
  	my $output = "package WebGUI::i18n::".$languageId.";\n\n";
  	$output .= "use strict;\n";
- 	$output .= "use utf8;\n\n";
- 	$output .= "our \$LANGUAGE = {\n";
- 	$output .= $data;
- 	$output .= "};\n\n";
+    $output .= "use utf8;\n\n";
+    $output .= "our \$LANGUAGE = ";
+    $output .= $data;
+    $output .= ";\n\n";
  
  $translit_replaces_r =~ s/\r//g; # For ***nix OS
  
- 	$output .= qq(sub makeUrlCompliant {
-         my \$value = shift;\n); 
+    $output .= qq(sub makeUrlCompliant {
+    my \$value = shift;\n);
  $output .= "##<-- start transliteration -->##\n".$translit_replaces_r."\n##<-- end transliteration -->##\n";
- $output .= qq(
- 	    \$value =~ s/\\s+\$//;                     #removes trailing whitespace
-         \$value =~ s/^\\s+//;                     #removes leading whitespace
-         \$value =~ s/^\\\\//;                      #removes leading slash
-         \$value =~ s/ /-/g;                      #replaces whitespace with underscores
-         \$value =~ s/\\.\$//;                      #removes trailing period
-         \$value =~ s/[^A-Za-z0-9\\-\\.\\_\\/]//g;    #removes all funky characters
-         \$value =~ s/^\\///;                      #removes a preceeding /
-         \$value =~ s/\\/\\//\\//g;                  #removes double /
-         return \$value;
- });
+ $output .= <<'END_TRANSLIT';
+    $value =~ s/\s+$//;                     #removes trailing whitespace
+    $value =~ s/^\s+//;                     #removes leading whitespace
+    $value =~ s/ /-/g;                      #replaces whitespace with underscores
+    $value =~ s/\.$//;                      #removes trailing period
+    $value =~ s/[^A-Za-z0-9._\/-]//g;       #removes all funky characters
+    $value =~ s{//+}{/}g;                   #removes double /
+    $value =~ s{^/}{};                      #removes a preceeding /
+    return $value;
+}
+END_TRANSLIT
  	$output .= "\n\n1;\n";
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'.pm', $output);
  }
@@ -371,6 +381,9 @@ sub writeNamespace {
  
 #------------------------------------------------------
 sub www_commitTranslation {
+	if (languageIdIsBad()) {
+		return '';
+	}
 	chdir($outputPath);
 	my $out = `cd $outputPath;/usr/bin/svn update $languageId`;
 	my $rawChanges = `cd $outputPath;/usr/bin/svn status $languageId`;
@@ -384,7 +397,7 @@ sub www_commitTranslation {
 			print "Updating ".$file."<br />";
 		}
 	}
-	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn -m update_from_translation_server commit $languageId`.'</pre>';
+	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn commit -m 'Update from translation server' --username $svn_user --password $svn_pass --no-auth-cache --non-interactive $languageId`.'</pre>';
 }
 
 #------------------------------------------------------
@@ -446,7 +459,7 @@ sub www_editItem {
  
  #------------------------------------------------------
 sub www_editItemSave {
- 	setNamespaceItems($cgi->param("namespace"),$cgi->param("tag"),$cgi->param("message"));
+    setNamespaceItems($cgi->param("namespace"),$cgi->param("tag"),decode_utf8($cgi->param("message")));
  	return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
  }
  
@@ -463,23 +476,23 @@ sub www_editLanguage {
  	$output .= '<tr><th>Toolbar</th><td><input type="text" name="toolbar" value="'.$lang->{toolbar}.'"><br />Use "bullet" without the quotes if you don\'t plan to create your own toolbar.</td></tr>';
  	$output .= '<tr><th>Language Abbreviation</th><td><input type="text" name="languageAbbreviation" value="'.$lang->{languageAbbreviation}.'"><br />This is the standard international two digit language code, which will be used by some javascripts and perl modules. For English it is "en".</td></tr>';
  	$output .= '<tr><th>Locale</th><td><input type="text" name="locale" value="'.$lang->{locale}.'"><br />This is the standard international two digit country abbreviation, which will be used by some javascripts and perl modules. For the United States it is "US".</td></tr>';
- 	$output .= '<tr><th>Replaces for transliteration<br /><br />Something like:<br /><br />';
- 	$output .= '
-         $value =~ s/Йа/J\\\'a/;<br />
-         $value =~ s/йа/j\\\'a/;<br />
-         $value =~ s/ЙА/J\\\'A/;<br />
-         $value =~ s/Я/Ja/g;<br />
-         $value =~ s/я/ja/g;<br />
- <br />
-         $value =~ s/^\\s+//;<br />
-         $value =~ s/^\\\\//;<br />
-         $value =~ s/ /_/g;<br />
-         $value =~ s/\\.\$//;<br />
-         $value =~ s/[^A-Za-z0-9\\-\\.\\_\\/]//g;<br />
-         $value =~ s/^\\///;<br />
-         $value =~ s/\\/\\//\\//g;<br />
- ';
-  	$output .= '</th><td width="100%"><textarea style="width: 100%;" rows="20" name="translit_replaces">'.ReadTranslit ().'</textarea><br />Transliterations are used in making URLs and file names conform to a usable standard. URLs and file names often can\'t deal with special characters used by various non-English languages. As such, those characters need to be transliterated into English characters.</td></tr>';
+ 	$output .= '<tr><th>Replaces for transliteration<br /><br />Something like:<br /><pre>';
+    $output .= <<END_TRANSLIT;
+\$value =~ s/\x{419}\x{430}/J\\'a/;
+\$value =~ s/\x{439}\x{430}/j\\'a/;
+\$value =~ s/\x{419}\x{410}/J\\'A/;
+\$value =~ s/\x{42f}/Ja/g;
+\$value =~ s/\x{44f}/ja/g;
+
+\$value =~ s/^\\s+//;
+\$value =~ s/^\\\\//;
+\$value =~ s/ /_/g;
+\$value =~ s/\\.\\\$//;
+\$value =~ s/[^A-Za-z0-9\\-\\.\\_\\/]//g;
+\$value =~ s/^\\///;
+\$value =~ s/\\/\\//\\//g;
+END_TRANSLIT
+    $output .= '</pre></th><td width="100%"><textarea style="width: 100%;" rows="20" name="translit_replaces">'.fixFormData(ReadTranslit()).'</textarea><br />Transliterations are used in making URLs and file names conform to a usable standard. URLs and file names often can\'t deal with special characters used by various non-English languages. As such, those characters need to be transliterated into English characters.</td></tr>';
  	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
  	$output .= '</table></form>';
  	return $output;
@@ -487,7 +500,7 @@ sub www_editLanguage {
  
  #------------------------------------------------------
 sub www_editLanguageSave {
- 	setLanguage($cgi->param("label"), $cgi->param("toolbar"), $cgi->param("translit_replaces"), $cgi->param("languageAbbreviation"), $cgi->param("locale"));
+    setLanguage(decode_utf8($cgi->param("label")), $cgi->param("toolbar"), decode_utf8($cgi->param("translit_replaces")), $cgi->param("languageAbbreviation"), $cgi->param("locale"));
  	return "Language saved.<p>".www_editLanguage();
  }
 
@@ -537,13 +550,13 @@ sub www_listItemsInNamespace {
  
  #------------------------------------------------------
 sub www_translatorsNotes {
-	open (my $notesFile, "<", $outputPath.'/'.$languageId.'/notes.txt');
-	my $notes = join("\n", <$notesFile>);
-	close($notesFile);
+    open (my $notesFile, "<:utf8", $outputPath.'/'.$languageId.'/notes.txt');
+    my $notes = do { local $/; <$notesFile> };
+    close($notesFile);
  	my $output = '<form method="post"><table width="95%">';
  	$output .= '<input type="hidden" name="languageId" value="'.$languageId.'">';
  	$output .= '<input type="hidden" name="op" value="translatorsNotesSave">';
-  	$output .= '<th></th><td width="100%"><textarea style="width: 100%;" rows="40" name="notes">'.$notes.'</textarea><br />Place any notes of interest here including common dictionary terms, translation notes, and a list of people who worked on this translation. This text will go into the translation distribution, but will not be displayed anywhere on the site, or affect system performance.</td></tr>';
+    $output .= '<th></th><td width="100%"><textarea style="width: 100%;" rows="40" name="notes">'.fixFormData($notes).'</textarea><br />Place any notes of interest here including common dictionary terms, translation notes, and a list of people who worked on this translation. This text will go into the translation distribution, but will not be displayed anywhere on the site, or affect system performance.</td></tr>';
  	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
  	$output .= '</table></form>';
  	return $output;
@@ -551,7 +564,7 @@ sub www_translatorsNotes {
  
  #------------------------------------------------------
 sub www_translatorsNotesSave {
-	open(my $notesFile, ">", $outputPath.'/'.$languageId.'/notes.txt');
+	open(my $notesFile, ">:utf8", $outputPath.'/'.$languageId.'/notes.txt');
 	print {$notesFile} $cgi->param("notes")."\n";
 	close($notesFile);
  	return "Notes saved.<p>".www_translatorsNotes();
@@ -559,41 +572,24 @@ sub www_translatorsNotesSave {
 
 #------------------------------------------------------
 sub ReadTranslit {
- my $translit_replaces_read = '';
- open(TRANSLIT,"$outputPath/$languageId/$languageId.pm") || die "$!\n";
- my @translit = <TRANSLIT>;
-    close(TRANSLIT);
- my $flag_T = 0;
- foreach  my $translit (@translit) {
- if ($translit =~ /##<-- end transliteration -->##/) {$flag_T = 0;}
- if ($flag_T == 1) {
- $translit_replaces_read .= $translit;
- }
- if ($translit =~ /##<-- start transliteration -->##/) {$flag_T = 1;}
- }
- return $translit_replaces_read;
- }
- 
- #------------------------------------------------------
-sub ConvertToUTF {
- 
- # Read list of files
- chdir ("$outputPath/$languageId/$languageId/");
-    my @files = <*>;
- my $files_l;
- foreach my $file (@files) {
- open(FILE,"./$file") || die "$!\n"; 
-   my @files_l = <FILE>;
-    close(FILE);
- my $lang_char = "UTF-8";
- $lang_char =~ s/windows-1251/CP1251/g;
- $lang_char =~ s/windows-1252/CP1252/g;
- my $converter = Text::Iconv->new("$lang_char", "UTF-8");
- @files_l = $converter->convert("@files_l");
- 
-    open(FILE,">$file") || die "$!\n";
-    print FILE "@files_l";
-    close(FILE);
- $files_l = '';
- 	}
- }
+    open(my $translit, '<:utf8', "$outputPath/$languageId/$languageId.pm") || die "$!\n";
+    my $flag_T = 0;
+    my $translit_replaces_read = '';
+    while (my $translit = <$translit>) {
+        if ($translit =~ /##<-- end transliteration -->##/) {
+            $flag_T = 0;
+            next;
+        }
+        if ($translit =~ /##<-- start transliteration -->##/) {
+            $flag_T = 1;
+            next;
+        }
+        if ($flag_T == 1) {
+            $translit_replaces_read .= $translit;
+        }
+    }
+    close $translit;
+    return $translit_replaces_read;
+}
+
+
