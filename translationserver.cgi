@@ -24,45 +24,44 @@ my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
  binmode(STDOUT, ":utf8");
 
  $|=1; # disable output buffer
- our $cgi = CGI->new;
- our $languageId = $cgi->param("languageId");
 
- our $editor_on;
+if ($ARGV[0] eq "--calculate") {
+	calculateCompletion();
+	exit;
+}
+
+our $cgi = CGI->new;
+our $languageId = $cgi->param("languageId");
+
+our $editor_on;
  
- if ($cgi->param("is_editor_on") ne "") {
- 
- our $editor_cookie;
- $editor_cookie = $cgi->cookie(-name=>'visual_editor_on',
- 							-expires=>'+48h',
-                         	-value=>[$cgi->param("is_editor_on")]);
- 
- print $cgi->header(
- 	-cookie=>$editor_cookie,
- 	-expires=>'-1d',
- 	-charset=>"UTF-8"
- 		);
- $editor_on = $cgi->param("is_editor_on");
- } else {
- print $cgi->header(
- 	-charset=>"UTF-8"
- 		);
- $editor_on = $cgi->cookie('visual_editor_on');
- }
+if ($cgi->param("is_editor_on") ne "") {
+ 	our $editor_cookie = $cgi->cookie(-name=>'visual_editor_on', -expires=>'+48h', -value=>[$cgi->param("is_editor_on")]);
+ 	print $cgi->header( -cookie=>$editor_cookie, -expires=>'-1d', -charset=>"UTF-8");
+ 	$editor_on = $cgi->param("is_editor_on");
+} 
+else {
+ 	print $cgi->header( -charset=>"UTF-8");
+ 	$editor_on = $cgi->cookie('visual_editor_on');
+}
  
  
 if ($cgi->param("op") eq "buildSiteFrames") {
 	print buildSiteFrames();
 	my $lang = getLanguage($languageId);
-} elsif ($cgi->param("op") ne "") {
+} 
+elsif ($cgi->param("op") ne "") {
  	print header();
  	if ($cgi->param("op") =~ /^[[:alpha:]]+$/) {
  		my $cmd = "&www_".$cgi->param("op");
  		print eval($cmd);
-	} else {
+	} 
+	else {
  		print "<h1>Stop Screwing Around</h1>";
 	}	
  	print footer();
-} else {
+} 
+else {
 	print header();
  	print buildMainScreen();
 	print footer();
@@ -77,29 +76,15 @@ sub buildMainScreen {
 	closedir(DIR);
 	my $out = '<h1>WebGUI Translation Server</h1><fieldset><legend>Choose An Existing Language To Edit</legend><img src="/i18n.gif" align="right" border="0" alt="Translation Server" />';
 	foreach my $file (sort @files) {
+		next unless -d $outputPath."/".$file;
 		next if $file =~ m{\A\.};
 		next if $file eq "..";
-		next if $file =~ m/\.tar\.gz$/;
-		next if $file eq "servernames";
 		$languageId = $file;
          	my $downloadUrl = buildURL('exportTranslation');
-		$out .= '<form method="post" style="margin:0px"><input type="hidden" name="op" value="buildSiteFrames"><input type="hidden" name="languageId" value="'.$file.'"><a href="'.$downloadUrl.'">Download</a>&nbsp;<input type="submit" value="edit"> '.$file.' (';
-
-		# calc percentages of completion
-               	my $total = 0;
-               	my $ood = 0;
- 		my $namespaces = getNamespaces();
-        	foreach my $namespace (@{$namespaces}) {
-                	my $eng = getNamespaceItems($namespace);
-                	my $lang = getNamespaceItems($namespace,$languageId);
-                	foreach my $tag (keys %{$eng}) {
-                        	$total++;
-                        	if ($lang->{$tag}{message} eq "" || $eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
-                                	$ood++;
-                        	}
-                	}
-        	}
-               	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
+		$out .= '<form method="post" style="margin:0px"><input type="hidden" name="op" value="buildSiteFrames"><input type="hidden" name="languageId" value="'.$languageId.'"><a href="'.$downloadUrl.'">Download</a>&nbsp;<input type="submit" value="edit"> '.$languageId.' (';
+		open my $complete, "<", $outputPath."/".$languageId.".complete";
+		my $percent = <$complete>;
+		close $complete;
 		$out .= $percent."% Complete)</form>\n";
 
 	}	
@@ -116,6 +101,38 @@ sub buildMainScreen {
 	</fieldset>
 STOP
 	return $out;
+} 
+ 
+#------------------------------------------------------
+sub calculateCompletion {
+	opendir(DIR,$outputPath);
+	my @files = readdir(DIR);
+	closedir(DIR);
+	foreach my $file (sort @files) {
+		next unless -d $outputPath."/".$file;
+		next if $file =~ m{\A\.};
+		next if $file eq "..";
+		$languageId = $file;
+
+		# calc percentages of completion
+               	my $total = 0;
+               	my $ood = 0;
+ 		my $namespaces = getNamespaces();
+        	foreach my $namespace (@{$namespaces}) {
+                	my $eng = getNamespaceItems($namespace);
+                	my $lang = getNamespaceItems($namespace,$languageId);
+                	foreach my $tag (keys %{$eng}) {
+                        	$total++;
+                        	if ($lang->{$tag}{message} eq "" || $eng->{$tag}{lastUpdated} >= $lang->{$tag}{lastUpdated}) {
+                                	$ood++;
+                        	}
+                	}
+        	}
+               	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
+		open(my $complete, ">", $outputPath."/".$languageId.".complete");
+		print $complete $percent;
+		close $complete;
+	}	
 } 
  
  #------------------------------------------------------
@@ -152,9 +169,9 @@ sub buildURL {
  		$url .= ';'.$param.'='.uri_escape($params->{$param});
  	}
  	return $url;
- }
+}
  
- #------------------------------------------------------
+#------------------------------------------------------
 sub fixFormData {
     my $value = shift;
     $value =~ s/\&/\&amp\;/g;
@@ -164,25 +181,26 @@ sub fixFormData {
     return $value;
 }
  
- #------------------------------------------------------
+#------------------------------------------------------
 sub footer {
  	return '</body></html>';
- }
+}
  
- #------------------------------------------------------
+#------------------------------------------------------
 sub getLanguage {
  	my $load = $outputPath.'/'.$languageId.'/'.$languageId.'.pm';
  	eval {require $load};
  	if ($@) {
  		writeLanguage();
  		return getLanguage();
- 	} else {
+ 	} 
+	else {
  		my $cmd = "\$WebGUI::i18n::".$languageId."::LANGUAGE";
  		return eval ($cmd);
  	}
- }
+}
  
- #------------------------------------------------------
+#------------------------------------------------------
 sub getNamespaceItems {
  	my $namespace = shift;
  	my $languageId = shift || "English";
@@ -190,14 +208,16 @@ sub getNamespaceItems {
  	my $load;
  	if ($languageId eq "English") {
  		$load = $webguiPath.'/lib/WebGUI/i18n/English/'.$namespace.'.pm';
- 	} else {
+ 	} 
+	else {
  		$load = $outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm';
  	}
  	eval {require $load};
  	if ($@ && !$inLoop) {
  		writeNamespace($namespace);
  		return getNamespaceItems($namespace,$languageId, 1);
- 	} else {
+ 	} 
+	else {
  		my $cmd = "\$WebGUI::i18n::".$languageId."::".$namespace."::I18N";
  		return eval($cmd);
  	}
@@ -384,6 +404,7 @@ sub www_commitTranslation {
 	if (languageIdIsBad()) {
 		return '';
 	}
+	calculateCompletion();
 	chdir($outputPath);
 	my $out = `cd $outputPath;/usr/bin/svn update $languageId`;
 	my $rawChanges = `cd $outputPath;/usr/bin/svn status $languageId`;
@@ -501,6 +522,7 @@ END_TRANSLIT
  #------------------------------------------------------
 sub www_editLanguageSave {
     setLanguage(decode_utf8($cgi->param("label")), $cgi->param("toolbar"), decode_utf8($cgi->param("translit_replaces")), $cgi->param("languageAbbreviation"), $cgi->param("locale"));
+	calculateCompletion();
  	return "Language saved.<p>".www_editLanguage();
  }
 
@@ -509,6 +531,7 @@ sub www_exportTranslation {
 	if (languageIdIsBad()) {
 		return '';
 	}
+	calculateCompletion();
 	chdir($outputPath);
 	system("tar cfz ".$languageId.".tar.gz --exclude=.svn ".$languageId);
 	return '<a href="/translations/'.$languageId.'.tar.gz">Download '.$languageId.'.tar.gz</a>';
