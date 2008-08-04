@@ -105,6 +105,7 @@ STOP
  
 #------------------------------------------------------
 sub calculateCompletion {
+    local $languageId;
 	opendir(DIR,$outputPath);
 	my @files = readdir(DIR);
 	closedir(DIR);
