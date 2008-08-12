@@ -79,6 +79,11 @@ sub correctTransactionItems{
     print " - finished\n";
     my $transactionResults = $db->read("select * from oldtransaction order by initDate");
     while (my $oldTranny = $transactionResults->hashRef) {
+        $db->setRow("transaction","transactionId",{
+            paymentDriverId             => $oldTranny->{gatewayId},
+            paymentDriverLabel          => $oldTranny->{gateway},
+        }, $oldTranny->{transactionId}); 
+
         my $date = WebGUI::DateTime->new($session, $oldTranny->{initDate});
         my $itemResults = $db->read("select * from oldtransactionitem where transactionId=?",[$oldTranny->{transactionId}]);
         while (my $oldItem = $itemResults->hashRef) {
