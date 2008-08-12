@@ -77,11 +77,18 @@ sub correctTransactionItems{
     print "Deleting bad transactionItems:";
     $db->write("delete from transactionItem where transactionId in (select transactionId from oldtransaction)");
     print " - finished\n";
+
     my $transactionResults = $db->read("select * from oldtransaction order by initDate");
+
+    print "Updating tansactions:";
     while (my $oldTranny = $transactionResults->hashRef) {
+
+        my ($paymentDriverId) = $db->quickScalar("select paymentGatewayId from paymentGateway where label = ? limit 1", [$oldTranny->{gateway}]);
+
         $db->setRow("transaction","transactionId",{
-            paymentDriverId             => $oldTranny->{gatewayId},
+            paymentDriverId             => $paymentDriverId,
             paymentDriverLabel          => $oldTranny->{gateway},
+            transactionCode             => $oldTranny->{gatewayId},
         }, $oldTranny->{transactionId}); 
 
         my $date = WebGUI::DateTime->new($session, $oldTranny->{initDate});
@@ -103,6 +110,7 @@ sub correctTransactionItems{
             });
         }
     }
+    print " - finished\n";
 }
 
 #-----------------------------------------
