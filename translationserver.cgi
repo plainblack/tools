@@ -447,7 +447,7 @@ sub www_displayMenu {
 				$ood++;
  			}
  		}
-		my $percent = ($total > 0) ? sprintf('%.0f',(($total - $ood) / $total)*100) : 0;
+		my $percent = ($total > 0) ? int((($total - $ood) / $total) * 100) : 0;
  		$output .= '<tr><td class="'.(($percent == 0) ? 'undefined' : ($percent < 100) ? 'outOfDate' : 'allGood').'">'.$percent.'%</td><td><a href="'.buildURL("listItemsInNamespace",{namespace=>$namespace}).'" target="editor">'.$namespace.'</a></td><td>'.($total - $ood).'/'.$total.'</td></tr>';
  	}
 	$output .= '</table>';
