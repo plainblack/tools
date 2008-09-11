@@ -88,28 +88,28 @@ if ($opt_sql) {
         map { [$_, version->new($_)] }
         map {@$_} @{$sth->fetchall_arrayref([0])};
     $sth->finish;
+    $dbh->disconnect;
     my $version = pop @versions;
     print "$version. Done.\n" if $opt_verbose >= 1;
 
     print "Creating database dump... " if $opt_verbose >= 1;
     $db_file->openw->close;
 
-    $sth = $dbh->table_info(undef, undef, '%');
-    my @tables = map {@$_} @{$sth->fetchall_arrayref([2])};
-    $sth->finish;
-
     my @skip_data_tables = qw(
         userSession     userSessionScratch
         webguiVersion   userLoginLog
         assetHistory    cache
     );
-    for my $table (@tables) {
-        my $skip_data = (grep { $table eq $_ } @skip_data_tables) ? '--no-data' : '';
-        system join(' ',
-            $mysqldump, "-u$db_user", "-p$db_pass", "-h$db_host",
-            "-P$db_port", $skip_data, '--compact', $db_name, $table,
-        ) . ">>$db_file";
-    }
+    system join(' ',
+        $mysqldump, "-u$db_user", "-p$db_pass", "-h$db_host",
+        "-P$db_port", '--no-data', '--compact', $db_name,
+    ) . ">>$db_file";
+
+    system join(' ',
+        $mysqldump, "-u$db_user", "-p$db_pass", "-h$db_host",
+        "-P$db_port", '--no-create-info', '--compact', $db_name,
+        map { "--ignore-table=$db_name.$_" } @skip_data_tables,
+    ) . ">>$db_file";
 
     my $fh = $db_file->open('a');
     $fh->print("INSERT INTO webguiVersion (webguiVersion,versionType,dateApplied) VALUES ('$version','Initial Install',UNIX_TIMESTAMP());\n");
