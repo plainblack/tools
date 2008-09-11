@@ -34,6 +34,7 @@ Getopt::Long::GetOptions(
     'clear!'        => \(my $opt_clear),
     'purge!'        => \(my $opt_purge),
     'cleantags!'    => \(my $opt_cleantags),
+    'finalize!'     => \(my $opt_finalize),
 ) || pod2usage(2);
 if ($opt_help) {
     pod2usage(1);
@@ -84,6 +85,7 @@ $opt_clear      = defined $opt_clear        ? $opt_clear        : $opt_dev;
 
 $opt_purge      = defined $opt_purge        ? $opt_purge        : $opt_upgrade;
 $opt_cleantags  = defined $opt_cleantags    ? $opt_cleantags    : $opt_upgrade;
+$opt_finalize   = defined $opt_finalize     ? $opt_finalize     : $opt_upgrade;
 
 # load needed modules
 unshift @INC, '/data/wre/lib';
@@ -288,6 +290,23 @@ INSERT INTO `assetVersionTag`
 VALUES (?,?,?,?,?,?,?,?,?,?,?)
 END_SQL
     $sth->execute($tag_id, "Base $version Install", 1, time(), '3', time(), '3', 0, '', '3', '');
+    print "Done.\n" if $opt_verbose >= 1;
+}
+
+if ($opt_finalize) {
+    print "Running all pending workflows... " if $opt_verbose >= 1;
+    print "\n" if $opt_verbose >= 2;
+    $wg_session ||= wg_session($wg_root, $config_file);
+    require WebGUI::Workflow::Instance;
+    my $sth = $dbh->prepare("SELECT instanceId FROM WorkflowInstance");
+    $sth->execute;
+    while (my ($instanceId) = $sth->fetchrow_array) {
+        my $instance = WebGUI::Workflow::Instance->new($wg_session, $instanceId);
+        while (my $result = $instance->run) {
+            last
+                if !($result eq 'complete' || $result eq 'waiting');
+        }
+    }
     print "Done.\n" if $opt_verbose >= 1;
 }
 
