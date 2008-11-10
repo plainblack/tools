@@ -1,0 +1,1554 @@
+#!/usr/bin/env perl
+WGDev::Command->run(@ARGV);
+BEGIN {
+    $INC{'WGDev.pm'} = __FILE__;
+    $INC{'WGDev/Asset.pm'} = __FILE__;
+    $INC{'WGDev/Command.pm'} = __FILE__;
+    $INC{'WGDev/Command/Build.pm'} = __FILE__;
+    $INC{'WGDev/Command/Db.pm'} = __FILE__;
+    $INC{'WGDev/Command/Edittmpl.pm'} = __FILE__;
+    $INC{'WGDev/Command/Package.pm'} = __FILE__;
+    $INC{'WGDev/Command/Reset.pm'} = __FILE__;
+    $INC{'WGDev/Command/Version.pm'} = __FILE__;
+    $INC{'WGDev/Database.pm'} = __FILE__;
+    $INC{'WGDev/Version.pm'} = __FILE__;
+}
+
+{
+package WGDev;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use File::Spec ();
+use Cwd ();
+use Carp qw(croak);
+
+sub new {
+    my $class = shift;
+    my ($root, $config) = @_;
+    my $self = bless {}, $class;
+    if (-e $config) {
+        # file exists as is, save absolute path
+        $self->{config_file} = $config = File::Spec->rel2abs($config);
+    }
+    if ($root) {
+        $self->{root} = $root;
+    }
+    else {
+        if (-e $config) {
+            my $config_dir = File::Spec->catpath( (File::Spec->splitpath($config))[0,1] );
+            $self->{root} = Cwd::realpath(File::Spec->catdir($config_dir, File::Spec->updir));
+        }
+        else {
+            my $dir = Cwd::getcwd();
+            while (1) {
+                if (-e File::Spec->catfile($dir, 'etc', 'WebGUI.conf.original')) {
+                    $self->{root} = $dir;
+                    last;
+                }
+                my $parent = Cwd::realpath( File::Spec->catdir( $dir, File::Spec->updir ) );
+                last
+                    if $dir eq $parent;
+                $dir = $parent;
+            }
+        }
+    }
+    if ($self->{root}) {
+        if (!$config) {
+            opendir my $dh, File::Spec->catdir($self->{root}, 'etc');
+            my @configs = readdir $dh;
+            closedir $dh;
+            @configs = grep { /\.conf$/ && ! /^(?:spectre|log).conf$/ } @configs;
+            if (@configs == 1) {
+                $config = $configs[0];
+            }
+        }
+        if ($config) {
+            $self->{config_file} ||= File::Spec->catfile($self->{root}, 'etc', $config);
+        }
+        $self->{lib}    = File::Spec->catdir($self->{root}, 'lib');
+    }
+    else {
+        croak "unable to determine webgui root!";
+    }
+
+    $self->set_environment;
+
+    return $self;
+}
+
+sub set_environment {
+    my $self = shift;
+    $ENV{WEBGUI_ROOT}   = $self->root;
+    $ENV{WEBGUI_CONFIG} = $self->config_file;
+    unshift @INC, $self->lib;
+    $ENV{PERL5LIB} = $ENV{PERL5LIB}
+        ? do { require Config; $self->lib . $Config::Config{path_sep} . $ENV{PERL5LIB} }
+        : $self->lib
+        ;
+    return 1;
+}
+
+sub root            { shift->{root} }
+sub config_file     { shift->{config_file} }
+sub lib             { shift->{lib} }
+sub config {
+    my $self = shift;
+    croak "no config file available"
+        unless $self->{config_file};
+    return $self->{config} ||= do {
+        require Config::JSON;
+        Config::JSON->new($self->config_file);
+    };
+}
+
+sub config_file_relative {
+    my $self = shift;
+    return $self->{config_file_relative} ||= do {
+        my $config_dir = Cwd::realpath(File::Spec->catdir($self->root, 'etc'));
+        File::Spec->abs2rel(Cwd::realpath($self->config_file), $config_dir);
+    }
+}
+
+sub db {
+    my $self = shift;
+    require WGDev::Database;
+    return $self->{db} ||= WGDev::Database->new($self->config);
+}
+
+sub session {
+    my $self = shift;
+    require WebGUI::Session;
+    if ($self->{session}) {
+        my $dbh = $self->{session}->db->dbh;
+        # evil, but we have to detect if the database handle died somehow
+        eval {
+            local $dbh->{PrintWarn} = 0;
+            local $dbh->{PrintError} = 0;
+            local $dbh->{RaiseError} = 1;
+            $dbh->do('SELECT 1');
+        };
+        if ($@) {
+            (delete $self->{session})->close;
+        }
+    }
+    return $self->{session} ||= do {
+        my $session = WebGUI::Session->open($self->root, $self->config_file_relative, undef, undef, $self->{session_id});
+        # eeevil
+        $self->{session_id} = $session->getId;
+        $session;
+    };
+}
+
+sub asset {
+    my $self = shift;
+    require WGDev::Asset;
+    $self->{asset} ||= WGDev::Asset->new($self->session);
+}
+
+sub version {
+    my $self = shift;
+    require WGDev::Version;
+    $self->{version} ||= WGDev::Version->new($self->root);
+}
+
+sub DESTROY {
+    my $self = shift;
+    if ($self->{session}) {
+        my $session = $self->session;
+        $session->var->end;
+        $session->close;
+        delete $self->{session};
+    }
+}
+
+1;
+
+}
+{
+package WGDev::Asset;
+use strict;
+use warnings;
+
+our $VERSION = '0.0.1';
+
+
+sub new {
+    my $class = shift;
+    my $session = shift;
+    my $self = bless {
+        session => $session,
+    }, $class;
+    require WebGUI::Asset;
+    return $self;
+}
+
+sub root {
+    return WebGUI::Asset->getRoot(shift->{session});
+}
+sub import {
+    return WebGUI::Asset->getImportNode(shift->{session});
+}
+sub default { goto &home }
+sub home {
+    return WebGUI::Asset->getDefault(shift->{session});
+}
+
+
+sub by_url {
+    return WebGUI::Asset->newByUrl(shift->{session}, @_);
+}
+
+sub by_id {
+    return WebGUI::Asset->new(shift->{session}, @_);
+}
+
+sub serialize {
+    my $self = shift;
+    my $asset = shift;
+    my $class = ref $asset;
+    my $definition = $class->definition($asset->session);
+    my %meta;
+    my %text;
+    #for my $def (@$definition) {
+    #}
+}
+
+sub deserialize {
+    my $self = shift;
+    my $asset_data = shift;
+
+}
+
+1;
+
+}
+{
+package WGDev::Command;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.1';
+
+use Getopt::Long ();
+use File::Spec ();
+use Cwd ();
+use Carp qw(croak);
+
+sub run {
+    my $class = shift;
+    Getopt::Long::Configure(qw(default gnu_getopt pass_through));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'h|?|help'          => \(my $opt_help),
+        'V|ver|version'     => \(my $opt_version),
+
+        'F|config-file=s'   => \(my $opt_config),
+        'R|webgui-root=s'   => \(my $opt_root),
+    ) || warn $class->usage && exit 1;
+
+    $opt_config ||= $ENV{WEBGUI_CONFIG};
+    $opt_root ||= $ENV{WEBGUI_ROOT};
+
+    my $command_name = shift @_;
+
+    my $command_module;
+    if ($command_name && $command_name =~ /^[a-zA-Z0-9-]+$/) {
+        (my $module = "WGDev::Command::\u$command_name") =~ s/-(.)/::\u$1/g;
+        (my $module_file = "$module.pm") =~ s{::}{/}g;
+        eval { require $module_file };
+        if ( $module->can('run') ) {
+            $command_module = $module;
+        }
+    }
+    if ($command_name && !$command_module) {
+        for my $path (File::Spec->path) {
+            my $execpath = File::Spec->catfile($path, "wgd-$command_name");
+            if (-x $execpath) {
+                require WGDev;
+                my $wgd = WGDev->new($opt_root, $opt_config);
+                $wgd->set_environment;
+                exec {$execpath} $execpath, $opt_help ? '--help' : (), $opt_version ? '--version' : (), @_;
+            }
+        }
+    }
+
+    if ($command_name && !$command_module) {
+        warn $class->usage(message => "Can't find command $command_name!\n", include_cmd_list => 1);
+        exit 2;
+    }
+    if ($opt_version) {
+        print "WGDev::Command version $VERSION";
+        if ($command_module) {
+            print " - $command_module version " . $command_module->VERSION;
+        }
+        print "\n";
+    }
+    elsif ($opt_help) {
+        if ($command_module) {
+            if ($command_module->can('usage')) {
+                print $command_module->usage;
+            }
+            else {
+                warn "No documentation for $command_name command.\n"
+            }
+            exit;
+        }
+        else {
+            print $class->usage;
+            exit;
+        }
+    }
+    elsif (!$command_name) {
+        warn $class->usage(message => "No command specified!\n", include_cmd_list => 1);
+        exit 1;
+    }
+    else {
+        require WGDev;
+        my $wgd = WGDev->new($opt_root, $opt_config);
+        eval {
+            $command_module->run($wgd, @_);
+        };
+        if ($@) {
+            die $@;
+        }
+        exit;
+    }
+}
+
+sub usage {
+    my $class = shift;
+    my %opts = @_;
+    my $command_name = (File::Spec->splitpath($0))[2];
+    my $message = $class . "\n";
+    $message .= $opts{message}
+        if $opts{message};
+    $message .= <<"END_HELP";
+
+usage: $command_name [arguments] <subcommand> [subcommand arguments]
+
+arguments:
+    -h
+    -?
+    --help          Display this help
+
+    -V
+    --version       Display version information
+
+    -F
+    --config-file=  Specify WebGUI config file to use.  Can be absolute, relative to
+                    the current directory, or relative to WebGUI's config directory.
+                    If not specified, it will try to use the WEBGUI_CONFIG environment
+                    variable.  If that is not set and there is only one config file
+                    in WebGUI's config directory, that file will be used.
+
+    -R
+    --webgui-root   Specify WebGUI's root directory.  Can be absolute or relative.
+                    If not specified, first the WEBGUI_ROOT environment variable will
+                    be checked, then will search upward from the current path for a
+                    WebGUI installation.
+
+END_HELP
+
+    $message .= "subcommands available:\n";
+    for my $command ($class->command_list) {
+        $message .= "    $command\n";
+    }
+    $message .= "\n";
+    return $message;
+}
+
+sub command_list {
+    my $class = shift;
+    my %commands;
+    (my $fn_prefix = $class) =~ s{::}{/}g;
+
+    require File::Find;
+    for my $inc_path (@INC) {
+        my $command_root = File::Spec->catdir($inc_path, split('::', $class));
+        next
+            unless -d $command_root;
+        File::Find::find({
+            no_chdir => 1,
+            wanted => sub {
+                return
+                    unless /\.pm$/;
+                no warnings;
+                my $file = File::Spec->abs2rel($File::Find::name, $command_root);
+                $file =~ s/\.pm$//;
+                my $command = join('-', map {lcfirst} File::Spec->splitdir($file));
+                $commands{$command} = 1;
+            },
+        }, $command_root);
+    }
+    for my $module ( grep { /^$fn_prefix\// } keys %INC ) {
+        (my $command = $module) =~ s/\.pm$//;
+        $command =~ s/^$fn_prefix\///;
+        $command = join '-', map {lcfirst} split('/', $command);
+        $commands{$command} = 1;
+    }
+    for my $command ( map { glob("$_/wgd-*") } File::Spec->path ) {
+        next
+            unless -x $command;
+        my $file = (File::Spec->splitpath($command))[2];
+        $file =~ s/^wgd-//;
+        $commands{$file} = 1;
+    }
+    return sort keys %commands;
+}
+
+1;
+
+}
+{
+package WGDev::Command::Build;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+    unless ($wgd->config_file) {
+        die "Can't find WebGUI root!\n";
+    }
+
+    my $opt_verbose = 0;
+    Getopt::Long::Configure(qw(default gnu_getopt));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'v|verbose'         => sub { $opt_verbose++ },
+        'q|quiet'           => sub { $opt_verbose-- },
+
+        's|sql!'            => \(my $opt_sql),
+        'u|uploads!'        => \(my $opt_uploads),
+    );
+
+    unless (defined $opt_sql || defined $opt_uploads) {
+        $opt_sql = 1;
+        $opt_uploads = 1;
+    }
+
+    # Autoflush
+    local $| = 1;
+
+    require version;
+
+    print "Finding current version number... " if $opt_verbose >= 1;
+    my $version = $wgd->version->database($wgd->db->connect);
+    print "$version. Done.\n" if $opt_verbose >= 1;
+
+    if ($opt_sql) {
+        require File::Copy;
+        print "Creating database dump... " if $opt_verbose >= 1;
+        my $db_file = File::Spec->catfile($wgd->root, 'docs', 'create.sql');
+        open my $out, '>', $db_file;
+
+        open my $in, '-|', 'mysqldump', $wgd->db->command_line('--compact', '--no-data');
+        File::Copy::copy($in, $out);
+        close $in;
+
+        my @skip_data_tables = qw(
+            userSession     userSessionScratch
+            webguiVersion   userLoginLog
+            assetHistory    cache
+        );
+        open $in, '-|', 'mysqldump', $wgd->db->command_line('--compact', '--no-create-info',
+            map { "--ignore-table=" . $wgd->db->database . '.' . $_ } @skip_data_tables
+            );
+        File::Copy::copy($in, $out);
+        close $in;
+
+        print {$out} "INSERT INTO webguiVersion (webguiVersion,versionType,dateApplied) VALUES ('$version','Initial Install',UNIX_TIMESTAMP());\n";
+
+        close $out;
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+# Clear and recreate uploads
+    if ($opt_uploads) {
+        require File::Copy;
+        require File::Find;
+        require File::Path;
+
+        print "Loading uploads from site... " if $opt_verbose >= 1;
+        my $wg_uploads = File::Spec->catdir($wgd->root, 'www', 'uploads');
+        File::Path::mkpath($wg_uploads);
+        my $site_uploads = $wgd->config->get('uploadsPath');
+        File::Find::find({
+            no_chdir    => 1,
+            wanted      => sub {
+                my $wg_path = $File::Find::name;
+                my (undef, undef, $filename) = File::Spec->splitpath($wg_path);
+                if ($filename eq '.svn' || $filename eq 'temp') {
+                    $File::Find::prune = 1;
+                    return;
+                }
+                my $rel_path = File::Spec->abs2rel($wg_path, $wg_uploads);
+                my $site_path = File::Spec->rel2abs($rel_path, $wg_uploads);
+                return
+                    if -e $site_path;
+                if (-d $site_path) {
+                    File::Path::rmtree($wg_path);
+                }
+                else {
+                    unlink $wg_path;
+                }
+            },
+        }, $wg_uploads);
+        File::Find::find({
+            no_chdir    => 1,
+            wanted      => sub {
+                my $site_path = $File::Find::name;
+                my (undef, undef, $filename) = File::Spec->splitpath($site_path);
+                if ($filename eq '.svn' || $filename eq 'temp') {
+                    $File::Find::prune = 1;
+                    return;
+                }
+                return
+                    if -d $site_path;
+                my $rel_path = File::Spec->abs2rel($site_path, $site_uploads);
+                my $wg_path = File::Spec->rel2abs($rel_path, $wg_uploads);
+                return
+                    if -e $wg_path && (stat(_))[7] == (stat($site_path))[7];
+                File::Copy::copy($site_path, $wg_path);
+            },
+        }, $site_uploads);
+        print "Done\n" if $opt_verbose >= 1;
+    }
+}
+
+sub usage {
+    my $class = shift;
+    return __PACKAGE__ . " - Builds database script and uploads\n" . <<'END_HELP';
+
+Uses the current database and uploads to build a new create.sql and update
+the local uploads directory.  With no options, builds both sql and uploads.
+
+arguments:
+    -s
+    --sql           make create.sql based on current database contents
+    -u
+    --uploads       make uploads based on current site's uploads
+
+END_HELP
+}
+sub usage {
+
+}
+
+1;
+
+}
+{
+package WGDev::Command::Db;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+    Getopt::Long::Configure(qw(default gnu_getopt));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'p|print'           => \(my $opt_print),
+        'd|dump:s'          => \(my $opt_dump),
+        'l|load=s'          => \(my $opt_load),
+        'c|clear'           => \(my $opt_clear),
+    );
+    my $db = $wgd->db;
+    my @command_line = $db->command_line(@_);
+    if (  (defined $opt_print || 0)
+        + (defined $opt_dump || 0)
+        + (defined $opt_load || 0)
+        + (defined $opt_clear || 0) > 1) {
+        die "Multiple database operations specified!\n";
+    }
+
+    if ($opt_print) {
+        print join " ", map {"'$_'"} @command_line
+    }
+    elsif (defined $opt_dump) {
+        if ($opt_dump && $opt_dump ne '-') {
+            $db->dump($opt_dump);
+        }
+        else {
+            exec {'mysqldump'} 'mysqldump', @command_line;
+        }
+    }
+    else {
+        exec {'mysql'} 'mysql', @command_line;
+    }
+}
+
+sub usage {
+    my $class = shift;
+    my $message = __PACKAGE__ . "\n" . <<'END_HELP';
+
+arguments:
+    -p
+    --print         Prints out the command options that would be passed to mysql
+    -d[file]
+    --dump[=file]   Dumps the database as an SQL script.  If a file is specified,
+                    dumps to that file.  Otherwise, dumps to standard out.
+    -c
+    --clear         Clears the database, removing all tables.
+
+Any other options will be passed through to the mysql or mysqldump commands if applicable.
+
+END_HELP
+    return $message;
+}
+
+1;
+
+}
+{
+package WGDev::Command::Edittmpl;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.1';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+    Getopt::Long::Configure(qw(default gnu_getopt));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'command'          => \(my $opt_command),
+    );
+    exit unless @_;
+
+    require WebGUI::Asset;
+    require File::Temp;
+
+    my @files;
+    for my $url (@_) {
+        my $template = WebGUI::Asset->newByUrl($wgd->session, $url);
+        unless ($template && $template->isa('WebGUI::Asset::Template')) {
+            warn "$url is not a valid template!\n";
+            next;
+        }
+        my $tmpl_data = $template->get;
+        $tmpl_data->{headBlock} =~ s/\r\n?/\n/g;
+        $tmpl_data->{template} =~ s/\r\n?/\n/g;
+        my ($fh, $filename) = File::Temp::tempfile();
+        binmode $fh, ':utf8';
+        print {$fh} <<END_FILE;
+~~~META~~~
+Title:      $tmpl_data->{title}
+URL:        $tmpl_data->{url}
+Namespace:  $tmpl_data->{namespace}
+Asset ID:   $tmpl_data->{assetId}
+~~~HEAD~~~
+$tmpl_data->{headBlock}
+~~~BODY~~~
+$tmpl_data->{template}
+END_FILE
+        close $fh;
+        push @files, {
+            template    => $template,
+            filename    => $filename,
+            mtime       => (stat($filename))[9],
+        };
+    }
+    my $command = $opt_command || $ENV{EDITOR} || 'vi';
+    system("$command " . join(" ", map { $_->{filename} } @files));
+
+    my $versionTag;
+    for my $file (@files) {
+        if ((stat($file->{filename}))[9] <= $file->{mtime}) {
+            warn "Skipping " . $file->{template}->get('url') . ", not changed.\n";
+            unlink $file->{filename};
+            next;
+        }
+        $versionTag ||= do {
+            my $vt = WebGUI::VersionTag->getWorking($wgd->session);
+            $vt->set({name=>"Template Filter"});
+            $vt;
+        };
+        open my $fh, '<', $file->{filename} || next;
+        my $tmpl_text = do { local $/; <$fh> };
+        close $fh;
+        unlink $file->{filename};
+        if ($tmpl_text =~ /\n~~~HEAD~~~\n(.*)\n~~~BODY~~~\n(.*)\n\z/ms) {
+            my ($head, $body) = ($1, $2);
+            if ($head && $body) {
+                $file->{template}->addRevision({
+                    headBlock   => $head,
+                    template    => $body,
+                });
+            }
+        }
+    }
+
+    if ($versionTag) {
+        $versionTag->commit;
+    }
+    return;
+}
+
+sub usage {
+    my $class = shift;
+    return __PACKAGE__ . " - Edit templates\n" . <<'END_HELP';
+
+Exports templates to temporary files, then opens them in your prefered editor.
+If modifications are made, the templates are updated.  Only changes to the
+template and head block are used - any modifications to the other fields are
+ignored.
+
+arguments:
+    <template urls> list of template urls
+    --command       Command to be executed.  If not specified, uses the EDITOR
+                    environment variable.  If that is not specified, uses vi.
+
+END_HELP
+}
+
+1;
+
+}
+{
+package WGDev::Command::Package;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+    require File::Copy;
+    Getopt::Long::Configure(qw(default gnu_getopt));
+    Getopt::Long::GetOptionsFromArray(\@_,
+    );
+    my $package_dir = File::Spec->catdir($wgd->root, 'docs', 'upgrades', 'packages-' . $wgd->version->module);
+    if (! -d $package_dir) {
+        mkdir $package_dir;
+    }
+    for my $url (@_) {
+        my $asset = $wgd->asset->by_url($url);
+        my $storage = $asset->exportPackage;
+        my $filename = $storage->getFiles->[0];
+        my $filepath = $storage->getPath($filename);
+        File::Copy::copy($filepath, File::Spec->catfile($package_dir, $filename));
+        print "Built package $filename.\n";
+    }
+}
+
+sub usage {
+    my $class = shift;
+    return __PACKAGE__ . " - Export assets for upgrade\n" . <<'END_HELP';
+
+Exports assets as packages to the current version's upgrade location.
+
+arguments:
+    <asset urls>    list of asset urls
+
+END_HELP
+}
+
+1;
+
+}
+{
+package WGDev::Command::Reset;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.1';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+
+    my $opt_verbose = 1;
+    Getopt::Long::Configure(qw(default gnu_getopt));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'v|verbose'     => sub { $opt_verbose++ },
+        'q|quiet'       => sub { $opt_verbose-- },
+
+        'f|fast'        => \(my $opt_fast),     # --no-upload --no-backup --no-delcache
+                                                # --no-purge --no-cleantags --no-index --no-runwf
+
+        'backup!'       => \(my $opt_backup),   # take a backup
+        'delcache!'     => \(my $opt_delcache), # clear the cache
+        'import!'       => \(my $opt_import),   # import a db script
+
+        't|test'        => \(my $opt_test),     # --backup --import
+        'd|dev'         => \(my $opt_dev),      # --backup --import --no-starter --debug --clear --upgrade --uploads
+        'b|build'       => \(my $opt_build),    # --verbose --backup --import --starter --no-debug --upgrade --purge
+                                                # --cleantags --index --runwf
+
+        'uploads!'      => \(my $opt_uploads),  # recreate the uploads dir
+        'upgrade!'      => \(my $opt_upgrade),  # use create.sql vs use previousVersion.sql and run the upgrade script
+
+        'debug!'        => \(my $opt_debug),    # enable debug
+        'starter!'      => \(my $opt_starter),  # enable site starter
+        'clear!'        => \(my $opt_clear),    # clear example content
+        'purge!'        => \(my $opt_purge),    # purge old asset revisions
+        'cleantags!'    => \(my $opt_cleantags),# clear version tags
+        'index!'        => \(my $opt_index),    # rebuild lineage and reindex search
+        'runwf!'        => \(my $opt_runwf),    # run all workflows
+    );
+
+    if ($opt_fast) {
+        $opt_backup     = 1
+            unless defined $opt_backup;
+        $opt_uploads    = 0
+            unless defined $opt_uploads;
+        $opt_backup     = 0
+            unless defined $opt_backup;
+        $opt_delcache   = 0
+            unless defined $opt_delcache;
+        $opt_purge      = 0
+            unless defined $opt_purge;
+        $opt_cleantags  = 0
+            unless defined $opt_cleantags;
+        $opt_index      = 0
+            unless defined $opt_index;
+        $opt_runwf      = 0
+            unless defined $opt_runwf;
+    }
+    if ($opt_dev) {
+        $opt_backup     = 1
+            unless defined $opt_backup;
+        $opt_import     = 1
+            unless defined $opt_import;
+        $opt_starter    = 0
+            unless defined $opt_starter;
+        $opt_debug      = 1
+            unless defined $opt_debug;
+        $opt_clear      = 1
+            unless defined $opt_clear;
+        $opt_uploads    = 1
+            unless defined $opt_uploads;
+        $opt_upgrade    = 1
+            unless defined $opt_upgrade;
+    }
+    if ($opt_build) {
+        $opt_verbose++;
+        $opt_backup     = 1
+            unless defined $opt_backup;
+        $opt_import     = 1
+            unless defined $opt_import;
+        $opt_starter    = 1
+            unless defined $opt_starter;
+        $opt_debug      = 0
+            unless defined $opt_debug;
+        $opt_upgrade    = 1
+            unless defined $opt_upgrade;
+        $opt_purge      = 1
+            unless defined $opt_purge;
+        $opt_cleantags  = 1
+            unless defined $opt_cleantags;
+        $opt_index      = 1
+            unless defined $opt_index;
+        $opt_runwf      = 1
+            unless defined $opt_runwf;
+    }
+    $opt_delcache = 1
+        unless defined $opt_delcache;
+
+    require File::Spec;
+
+    local $| = 1;
+
+    if ($opt_backup) {
+        print "Backing up current database... " if $opt_verbose >= 1;
+        $wgd->db->dump('/tmp/WebGUI-reset-backup.sql');
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    # Clear cache
+    if ($opt_delcache) {
+        require File::Path;
+        print "Clearing cache... " if $opt_verbose >= 1;
+        if ($wgd->config->get('cacheType') eq 'WebGUI::Cache::FileCache') {
+            my $cache_dir = $wgd->config->get('fileCacheRoot') || '/tmp/WebGUICache';
+            File::Path::rmtree($cache_dir);
+        }
+        else {
+            # We'd clear the DB cache here, but the whole database will be cleared in a later step
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    # Clear and recreate uploads
+    if ($opt_uploads) {
+        require File::Copy;
+        require File::Find;
+        require File::Path;
+        print "Recreating uploads... " if $opt_verbose >= 1;
+
+        my $wg_uploads = File::Spec->catdir($wgd->root, 'www', 'uploads');
+        my $site_uploads = $wgd->config->get('uploadsPath');
+        File::Path::rmtree($site_uploads);
+        File::Find::find({
+            no_chdir    => 1,
+            wanted      => sub {
+                no warnings;
+                my $wg_path = $File::Find::name;
+                my $site_path = File::Spec->rel2abs(File::Spec->abs2rel($wg_path, $wg_uploads), $site_uploads);
+                if (-d $wg_path) {
+                    my $dir = (File::Spec->splitdir($wg_path))[-1];
+                    if ($dir =~ /^\./) {
+                        $File::Find::prune = 1;
+                        return;
+                    }
+                    File::Path::mkpath($site_path);
+                }
+                else {
+                    File::Copy::copy($wg_path, $site_path);
+                }
+            },
+        }, $wg_uploads);
+        print "Done\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_import) {
+        # Connect using dsn and clean out old tables
+        print "Clearing old database information... " if $opt_verbose >= 1;
+        $wgd->db->clear;
+        print "Done.\n" if $opt_verbose >= 1;
+
+        # If we aren't upgrading, we're using the current DB version
+        print "Importing clean database dump... " if $opt_verbose >= 1;
+        my $db_file = $opt_upgrade ? 'previousVersion.sql' : 'create.sql';
+        $wgd->db->load(File::Spec->catfile($wgd->root, 'docs', $db_file));
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    # Run the upgrade in a fork
+    if ($opt_upgrade) {
+        print "Running upgrade script... " if $opt_verbose >= 1;
+        # todo: only upgrade single site
+        my $pid = fork;
+        unless ($pid) {
+            # child process, don't need to worry about restoring anything
+            chdir File::Spec->catdir($wgd->root, 'sbin');
+            @ARGV = qw(--doit --override --skipBackup);
+            push @ARGV, '--quiet'
+                if $opt_verbose < 2;
+            do 'upgrade.pl';
+            die $@ if $@;
+            exit;
+        }
+        waitpid $pid, 0;
+        if ($?) {
+            die "Upgrade failed!\n";
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    print "Finding current version number... " if $opt_verbose >= 1;
+    my $version = $wgd->version->database($wgd->db->connect);
+    print "$version. Done.\n" if $opt_verbose >= 1;
+
+    if (defined $opt_debug || defined $opt_starter) {
+        print "Setting WebGUI settings... " if $opt_verbose >= 1;
+        my $dbh = $wgd->db->connect;
+        my $sth = $dbh->prepare("REPLACE INTO `settings` (`name`, `value`) VALUES (?,?)");
+        if ($opt_debug) {
+            $sth->execute('showDebug', 1);
+            $sth->execute('sessionTimeout', 31536000);
+        }
+        elsif (defined $opt_debug) {
+            $sth->execute('showDebug', 0);
+            $sth->execute('sessionTimeout', 7200);
+        }
+        if ($opt_starter) {
+            $sth->execute('specialState', 'init');
+        }
+        elsif (defined $opt_starter) {
+            $dbh->do("DELETE FROM `settings` WHERE `name`='specialState'");
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_clear) {
+        print "Clearing example assets... " if $opt_verbose >= 1;
+        print "\n" if $opt_verbose >= 2;
+        my $home = $wgd->asset->home;
+        my $children = $home->getLineage(['descendants'], {
+            statesToInclude => ['published', 'trash', 'clipboard', 'clipboard-limbo', 'trash-limbo'],
+            statusToInclude => ['approved', 'pending', 'archive'],
+            excludeClasses  => ['WebGUI::Asset::Wobject::Layout'],
+            returnObjects   => 1,
+            invertTree      => 1,
+        });
+        for my $child (@$children) {
+            printf "\tRemoving \%-35s '\%s'\n", $child->getName, $child->get('title')
+                if $opt_verbose >= 2;
+            $child->purge;
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_purge) {
+        require WebGUI::Asset;
+        print "Purging old Asset revisions... " if $opt_verbose >= 1;
+        print "\n" if $opt_verbose >= 2;
+        my $sth = $wgd->db->connect->prepare(<<END_SQL);
+        SELECT assetData.assetId, asset.className, assetData.revisionDate
+        FROM asset
+            LEFT JOIN assetData on asset.assetId=assetData.assetId
+        ORDER BY assetData.revisionDate ASC
+END_SQL
+        $sth->execute;
+        while (my ($id, $class, $version) = $sth->fetchrow_array) {
+            my $current_version = WebGUI::Asset->getCurrentRevisionDate($wgd->session, $id);
+            if (!defined $current_version || $current_version == $version) {
+                next;
+            }
+            my $asset = WebGUI::Asset->new($wgd->session, $id, $class, $version)
+                || next;
+            if ($asset->getRevisionCount("approved") > 1) {
+                printf "\tPurging \%-35s \%s '\%s'\n", $asset->getName, $version, $asset->get('title')
+                    if $opt_verbose >= 2;
+                $asset->purgeRevision;
+            }
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_cleantags) {
+        print "Cleaning out versions Tags... " if $opt_verbose >= 1;
+        my $tag_id = 'pbversion0000000000001';
+        my $dbh = $wgd->db->connect;
+        my $sth = $dbh->prepare("UPDATE `assetData` SET `tagId` = ?");
+        $sth->execute($tag_id);
+        $sth = $dbh->prepare("DELETE FROM `assetVersionTag`");
+        $sth->execute;
+        $sth = $dbh->prepare(<<'END_SQL');
+            INSERT INTO `assetVersionTag`
+                ( `tagId`, `name`, `isCommitted`, `creationDate`, `createdBy`, `commitDate`,
+                  `committedBy`, `isLocked`, `lockedBy`, `groupToUse`, `workflowId` )
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+END_SQL
+        my $now = time;
+        $sth->execute($tag_id, "Base $version Install", 1, $now, '3', $now, '3', 0, '', '3', '');
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_runwf) {
+        print "Running all pending workflows... " if $opt_verbose >= 1;
+        print "\n" if $opt_verbose >= 2;
+        require WebGUI::Workflow::Instance;
+        my $sth = $wgd->db->connect->prepare("SELECT instanceId FROM WorkflowInstance");
+        $sth->execute;
+        while (my ($instanceId) = $sth->fetchrow_array) {
+            my $instance = WebGUI::Workflow::Instance->new($wgd->session, $instanceId);
+            my $waiting_count = 0;
+            while (my $result = $instance->run) {
+                if ($result eq 'complete') {
+                    $waiting_count = 0;
+                    next;
+                }
+                if ($result eq 'waiting') {
+                    if ($waiting_count++ > 10) {
+                        warn "Unable to finish workflow " . $instanceId . ", too many iterations!\n";
+                        last;
+                    }
+                    next;
+                }
+                if ($result eq 'done') {
+                }
+                elsif ($result eq 'error') {
+                    warn "Unable to finish workflow " . $instanceId . ".  Error!\n";
+                }
+                else {
+                    warn "Unable to finish workflow " . $instanceId . ".  Unknown status $result!\n";
+                }
+                last;
+            }
+        }
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+
+    if ($opt_index) {
+        print "Rebuilding lineage... " if $opt_verbose >= 1;
+        my $pid = fork;
+        unless ($pid) {
+            if ($opt_verbose < 3) {
+                open STDIN,  '<', File::Spec->devnull;
+                open STDOUT, '>', File::Spec->devnull;
+                open STDERR, '>', File::Spec->devnull;
+            }
+            print "\n\n";
+            chdir File::Spec->catdir($wgd->root, 'sbin');
+            @ARGV = ('--configFile=' . $wgd->config_file_relative);
+            $0 = './rebuildLineage.pl';
+            do $0;
+            exit;
+        }
+        waitpid $pid, 0;
+        print "Done.\n" if $opt_verbose >= 1;
+
+        print "Rebuilding search index... " if $opt_verbose >= 1;
+        $pid = fork;
+        unless ($pid) {
+            if ($opt_verbose < 3) {
+                open STDIN,  '<', File::Spec->devnull;
+                open STDOUT, '>', File::Spec->devnull;
+                open STDERR, '>', File::Spec->devnull;
+            }
+            print "\n\n";
+            chdir File::Spec->catdir($wgd->root, 'sbin');
+            @ARGV = ('--configFile=' . $wgd->config_file_relative, '--indexsite');
+            $0 = './search.pl';
+            do $0;
+            exit;
+        }
+        waitpid $pid, 0;
+        print "Done.\n" if $opt_verbose >= 1;
+    }
+    return;
+}
+
+sub usage {
+    my $class = shift;
+    my $message = __PACKAGE__ . "\n" . <<'END_HELP';
+
+arguments:
+    -v
+    --verbose       Output more information
+    -q
+    --quiet         Output less information
+
+    -f
+    --fast          Fast mode - equivalent to:
+                    --no-upload --no-backup --no-delcache --no-purge
+                    --no-cleantags --no-index --no-runwf
+
+    -t
+    --test          Test mode - equivalent to:
+                    --backup --import
+    -d
+    --dev           Developer mode - equivalent to:
+                    --backup --import --no-starter --debug --clear
+                    --upgrade --uploads
+    -b
+    --build         Build mode - equivalent to:
+                    --verbose --backup --import --starter --no-debug
+                    --upgrade --purge --cleantags --index --runwf
+
+    --backup
+    --no-backup     Backup database before doing any other operations.  Defaults to on.
+    --delcache
+    --no-delcache   Delete the site's cache.  Defaults to on.
+    --import
+    --no-import     Import a database script
+    --uploads
+    --no-uploads    Recreate uploads directory
+    --upgrade
+    --no-upgrade    Perform an upgrade - also controls which DB script to import
+    --debug
+    --no-debug      Enable debug mode and increase session timeout
+    --starter
+    --no-starter    Enable the site starter
+    --clear
+    --no-clear      Clear the content off the home page and its children
+    --purge
+    --no-purge      Purge all old revisions
+    --cleantags
+    --no-cleantags  Removes all version tags and sets all asset revisions to be
+                    under a new version tag marked with the current version number
+    --index
+    --no-index      Rebuild the site lineage and reindex all of the content
+    --runwf
+    --no-runwf      Attempt to finish any running workflows
+
+END_HELP
+
+    return $message;
+}
+
+1;
+
+}
+{
+package WGDev::Command::Version;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use Getopt::Long ();
+
+sub run {
+    my $class = shift;
+    my $wgd = shift;
+    Getopt::Long::Configure(qw(no_getopt_compat));
+    Getopt::Long::GetOptionsFromArray(\@_,
+        'c|create'      => \(my $opt_create),
+        'b|bare'        => \(my $opt_bare),
+    );
+
+    my $ver = shift @_;
+
+    my $wgv = $wgd->version;
+    if ($opt_create) {
+        my $root = $wgd->root;
+        my $old_version = $wgv->module;
+        my $new_version = $ver || do {
+            my @parts = split /\./, $old_version;
+            $parts[-1]++;
+            join '.', @parts;
+        };
+
+        open my $fh, '<', File::Spec->catfile($root, 'lib', 'WebGUI.pm');
+        my @pm_content = do { local $/; <$fh> };
+        close $fh;
+        open $fh, '>', File::Spec->catfile($root, 'lib', 'WebGUI.pm');
+        for my $line (@pm_content) {
+            $line =~ s/(\$VERSION\s*=).*;/$1 '$new_version';/;
+            print {$fh} $line;
+        }
+        close $fh;
+
+        my ($change_file) = $wgv->changelog;
+        my $change_content = do {
+            open my $fh, '<', File::Spec->catfile($root, 'docs', 'changelog', $change_file);
+            local $/;
+            <$fh>;
+        };
+        open $fh, '>', File::Spec->catfile($root, 'docs', 'changelog', $change_file);
+        print {$fh} $new_version . "\n\n" . $change_content;
+        close $fh;
+
+        open my $in, '<', File::Spec->catfile($root, 'docs', 'upgrades', '_upgrade.skeleton');
+        open my $out, '>', File::Spec->catfile($root, 'docs', 'upgrades', "upgrade_$old_version-$new_version.pl");
+        while (my $line = <$in>) {
+            $line =~ s/(\$toVersion\s*=).*$/$1 '$new_version';/;
+            print {$out} $line;
+        }
+        close $out;
+        close $in;
+    }
+
+    my ($perl_version, $perl_status) = $wgv->module;
+    if ($opt_bare) {
+        print $perl_version, "\n";
+        exit;
+    }
+
+    my $db_version = $wgv->database_script;
+    my ($change_file, $change_version) = $wgv->changelog;
+    my ($up_file, undef, $up_file_ver, $up_version) = $wgv->upgrade;
+
+    my $err_count = 0;
+    my $expect_ver = $ver || $perl_version;
+    if ($perl_version ne $expect_ver) {
+        $err_count++;
+        $perl_version = colored($perl_version, 'bold red')
+    }
+    if ($db_version ne $expect_ver) {
+        $err_count++;
+        $db_version = colored($db_version, 'bold red')
+    }
+    if ($change_version ne $expect_ver) {
+        $err_count++;
+        $change_version = colored($change_version, 'bold red')
+    }
+    if ($up_version ne $expect_ver) {
+        $err_count++;
+        $up_version = colored($up_version, 'bold red')
+    }
+    if ($up_file_ver ne $expect_ver) {
+        $err_count++;
+        $up_file = colored($up_file, 'bold red')
+    }
+
+    print <<END_REPORT;
+  Perl version:             $perl_version - $perl_status
+  Database version:         $db_version
+  Changelog version:        $change_version
+  Upgrade script version:   $up_version
+  Upgrade script filename:  $up_file
+END_REPORT
+
+    print colored("\n  Version numbers don't match!\n", 'bold red')
+        if $err_count;
+
+}
+
+sub colored {
+    no warnings 'redefine';
+    if (eval { require Term::ANSIColor; 1 }) {
+        *colored = \&Term::ANSIColor::colored;
+    }
+    else {
+        *colored = sub {$_[0]};
+    }
+    goto &colored;
+}
+
+sub usage {
+    my $class = shift;
+    return __PACKAGE__ . " - Reports and updates version numbers\n" . <<'END_HELP';
+
+Reports the current versions of the WebGUI.pm module, create.sql database
+script, changelog, and upgrade file.  Non-matching versions will be noted
+in red if possible.
+
+arguments:
+    <version number>    the expected version number to compare with
+    -c
+    --create            change the version number to a new one in the changelog,
+                        WebGUI.pm, and creates a new upgrade script.  If the
+                        version number isn't otherwise specified, increments
+                        the patch level by one.
+
+END_HELP
+}
+
+1;
+
+}
+{
+package WGDev::Database;
+use strict;
+use warnings;
+
+our $VERSION = '0.0.1';
+
+sub username    { shift->{username} }
+sub password    { shift->{password} }
+sub database    { shift->{database} }
+sub hostname    { shift->{hostname} }
+sub port        { shift->{port} }
+sub dsn         { shift->{dsn} }
+
+sub user    { goto &username }
+sub pass    { goto &password }
+sub host    { goto &hostname }
+sub name    { goto &database }
+
+sub new {
+    my $class = shift;
+    my $config = shift;
+    my $self = bless {}, $class;
+
+    my $dsn = $self->{dsn}  = $config->get('dsn');
+    $self->{username}   = $config->get('dbuser');
+    $self->{password}   = $config->get('dbpass');
+    $self->{database}   = (split(/[:;]/, $dsn))[2];
+    $self->{hostname}   = 'localhost';
+    $self->{port}       = '3306';
+    while ($dsn =~ /([^=;:]+)=([^;:]+)/g) {
+        if ($1 eq 'host' || $1 eq 'hostname') {
+            $self->{hostname} = $2;
+        }
+        elsif ($1 eq 'db' || $1 eq 'database' || $1 eq 'dbname') {
+            $self->{database} = $2;
+        }
+        elsif ($1 eq 'port') {
+            $self->{port} = $2;
+        }
+    }
+    return $self;
+}
+
+sub command_line {
+    my $self = shift;
+    my @params = (
+        '-h' . $self->hostname,
+        '-P' . $self->port,
+        $self->database,
+        '-u' . $self->username,
+        ($self->password ? '-p' . $self->password : ()),
+        @_
+    );
+    return wantarray ? @params : join (' ', map {"'$_'"} @params);
+}
+
+sub connect {
+    my $self = shift;
+    require DBI;
+    if ($self->{dbh}) {
+        eval {
+            $self->{dbh}->do('SELECT 1');
+        };
+        delete $self->{dbh}
+            if $@;
+    }
+    return $self->{dbh} ||= DBI->connect(
+        $self->dsn, $self->username, $self->password,
+        {RaiseError => 1, PrintWarn => 0, PrintError => 0, mysql_enable_utf8 => 1}
+    );
+}
+sub dbh         { shift->{dbh} }
+sub open        { goto &connect }
+
+sub disconnect {
+    my $self = shift;
+    if (my $dbh = delete $self->{dbh}) {
+        $dbh->disconnect;
+    }
+}
+sub close       { goto &disconnect }
+
+sub clear {
+    my $self = shift;
+    my $dbh = $self->connect;
+    my $sth = $dbh->table_info(undef, undef, '%');
+    my @tables = map {@$_} @{$sth->fetchall_arrayref([2])};
+    for my $table (@tables) {
+        $dbh->do('DROP TABLE ' . $dbh->quote_identifier($table));
+    }
+    return 1;
+}
+
+sub load {
+    my $self = shift;
+    my $dumpfile = shift;
+    $self->clear;
+    system 'mysql', $self->command_line('-e' . 'source ' . $dumpfile)
+        and die;
+    return 1;
+}
+
+sub dump {
+    my $self = shift;
+    my $dumpfile = shift;
+    system 'mysqldump', $self->command_line('-r' . $dumpfile)
+        and die;
+    return 1;
+}
+
+1;
+
+}
+{
+package WGDev::Version;
+use strict;
+use warnings;
+
+our $VERSION = '0.1.0';
+
+use version;
+use File::Spec;
+
+sub new {
+    my $class = shift;
+    my $dir = shift || die;
+    my $self = bless \$dir, $class;
+    return $self;
+}
+
+sub pm { goto &module }
+sub module {
+    my $dir = ${ +shift };
+    my $version;
+    my $status;
+    open my $fh, '<', File::Spec->catfile($dir, 'lib', 'WebGUI.pm') or die;
+    while (my $line = <$fh>) {
+        if ($line =~ /\$VERSION\s*=(.*)$/) {
+            $version = eval $1;
+        }
+        if ($line =~ /\$STATUS\s*=(.*)$/) {
+            $status = eval $1;
+        }
+        last
+            if $version && $status;
+    }
+    close $fh;
+    return wantarray ? ($version, $status) : $version;
+}
+
+sub db_script { goto &database_script }
+sub database_script {
+    my $dir = ${ +shift };
+    my $version;
+    open my $fh, '<', File::Spec->catfile($dir, 'docs', 'create.sql') or die;
+    while (my $line = <$fh>) {
+        if ($line =~ /(?:(?i)INSERT INTO) (`?)webguiVersion\1\s+.+? (?i)VALUES \('([^']+)'/) {
+            $version = $2;
+            last;
+        }
+    }
+    close $fh;
+    return $version;
+}
+
+sub db { goto &database }
+sub database {
+    my $dir = ${ +shift };
+    my $dbh = shift;
+    require version;
+    my $sth = $dbh->prepare('SELECT webguiVersion FROM webguiVersion');
+    $sth->execute;
+    my @versions =
+        map { $_->[0] }
+        sort { $a->[1] <=> $b->[1]}
+        map { [$_, version->new($_)] }
+        map {@$_} @{$sth->fetchall_arrayref([0])};
+    $sth->finish;
+    my $version = pop @versions;
+    return $version;
+}
+
+sub changelog {
+    my $dir = ${ +shift };
+    my @changelogs;
+    opendir my $dh, File::Spec->catdir($dir, 'docs', 'changelog') or die;
+    while (my $file = readdir($dh)) {
+        if ($file =~ /^([0-9x]+\.[0-9x]+\.[0-9x]+)\.txt$/) {
+            (my $v = $1) =~ tr/x/0/;
+            push @changelogs, [$file, version->new($v)];
+        }
+    }
+    closedir $dh;
+    @changelogs = sort {$a->[1] <=> $b->[1]} @changelogs;
+    my $latest = pop @changelogs;
+    open my $fh, '<', File::Spec->catfile($dir, 'docs', 'changelog', $latest->[0]) or die;
+    while (my $line = <$fh>) {
+        if ($line =~ /^(\d+\.\d+\.\d+)$/) {
+            $latest->[1] = $1;
+            last;
+        }
+    }
+    close $fh;
+    return @$latest;
+}
+
+# returns ($upgrade_file, $from_version, $to_version, $to_version_file)
+sub upgrade {
+    my $dir = ${ +shift };
+    my @upgrades;
+    opendir my $dh, File::Spec->catdir($dir, 'docs', 'upgrades') or die;
+    while (my $file = readdir($dh)) {
+        if ($file =~ /^upgrade_([.0-9]+)-([.0-9]+)\.pl$/) {
+            push @upgrades, [$file, version->new($1), version->new($2)];
+        }
+    }
+    closedir $dh;
+    @upgrades = sort {$a->[2] <=> $b->[2]} @upgrades;
+    my $latest = pop @upgrades;
+    open my $fh, '<', File::Spec->catfile($dir, 'docs', 'upgrades', $latest->[0]) or die;
+    while (my $line = <$fh>) {
+        if ($line =~ /\$toVersion\s*=(.*)$/) {
+            push @$latest, eval $1;
+            last;
+        }
+    }
+    close $fh;
+    return @$latest;
+}
+
+1;
+
+}
