@@ -589,7 +589,7 @@ sub www_translatorsNotes {
  #------------------------------------------------------
 sub www_translatorsNotesSave {
 	open(my $notesFile, ">:utf8", $outputPath.'/'.$languageId.'/notes.txt');
-	print {$notesFile} $cgi->param("notes")."\n";
+	print {$notesFile} decode_utf8($cgi->param("notes"))."\n";
 	close($notesFile);
  	return "Notes saved.<p>".www_translatorsNotes();
  }
