@@ -471,7 +471,7 @@ sub www_editItem {
  	$output .= '<tr><th>Tag</th><td>'.$cgi->param("tag").'</td></tr>';
  	$output .= '<input type="hidden" name="tag" value="'.$cgi->param("tag").'">';
  	$output .= '<input type="hidden" name="op" value="editItemSave">';
- 	$output .= '<tr><th valign="top">Message</td><td width="95%"><textarea style="width: 100%" rows="30" name="message" mce_editable="true">'.fixFormData($lang->{$cgi->param("tag")}{message}).'</textarea></td></tr>';
+ 	$output .= '<tr><th valign="top">Message</td><td width="95%"><textarea style="width: 100%" rows="10" name="message" mce_editable="true">'.fixFormData($lang->{$cgi->param("tag")}{message}).'</textarea></td></tr>';
  	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
  	$output .= '<tr><th valign="top">Original Message</th><td>'.$eng->{$cgi->param("tag")}{message}.'</td></tr>';
  	$output .= '<tr><th valign="top">Message Context Info</th><td>'.$eng->{$cgi->param("tag")}{context}.'</td></tr>' if ($eng->{$cgi->param("tag")}{context});
@@ -617,3 +617,10 @@ sub ReadTranslit {
 }
 
 
+__END__
+
+=head2 Changelog
+
+=item * Dec 26, 2008
+
+Implemented RFE: Less lines in i18n editor  (#9350).  Changed number of lines from 30 to 10.
