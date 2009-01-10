@@ -481,8 +481,13 @@ sub www_editItem {
  
  #------------------------------------------------------
 sub www_editItemSave {
-    setNamespaceItems($cgi->param("namespace"),$cgi->param("tag"),decode_utf8($cgi->param("message")));
- 	return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
+    my $english = getNamespaces();
+    my $namespace = $cgi->param("namespace");
+    my %namespaces = map { $_ => 1 } @{ $english };
+    if (exists $namespaces{$namespace}) {
+        setNamespaceItems($namespace,$cgi->param("tag"),decode_utf8($cgi->param("message")));
+    }
+    return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
  }
  
  #------------------------------------------------------
