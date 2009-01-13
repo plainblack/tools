@@ -1,19 +1,19 @@
 #!/data/wre/prereqs/bin/perl
- 
+
 use strict;
 use CGI;
 use CGI::Carp qw (fatalsToBrowser);
 use Config::JSON;
 use URI::Escape;
 use Data::Dumper;
-use Encode qw(decode_utf8);
- 
- #-----main----------------
+use Encode qw(decode_utf8 encode);
+
+#-----main----------------
 my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
- 
- 
+
+
  my $config = Config::JSON->new($wgi18neditRoot.'/etc/i18n.conf');
- 
+
  our $outputPath = $config->get("outputPath");
  our $webguiPath = $config->get("webguiPath");
  our $editor_lang = $config->get("editor_lang");
@@ -34,41 +34,41 @@ our $cgi = CGI->new;
 our $languageId = $cgi->param("languageId");
 
 our $editor_on;
- 
+
 if ($cgi->param("is_editor_on") ne "") {
  	our $editor_cookie = $cgi->cookie(-name=>'visual_editor_on', -expires=>'+48h', -value=>[$cgi->param("is_editor_on")]);
  	print $cgi->header( -cookie=>$editor_cookie, -expires=>'-1d', -charset=>"UTF-8");
  	$editor_on = $cgi->param("is_editor_on");
-} 
+}
 else {
  	print $cgi->header( -charset=>"UTF-8");
  	$editor_on = $cgi->cookie('visual_editor_on');
 }
- 
- 
+
+
 if ($cgi->param("op") eq "buildSiteFrames") {
 	print buildSiteFrames();
 	my $lang = getLanguage($languageId);
-} 
+}
 elsif ($cgi->param("op") ne "") {
  	print header();
  	if ($cgi->param("op") =~ /^[[:alpha:]]+$/) {
  		my $cmd = "&www_".$cgi->param("op");
  		print eval($cmd);
-	} 
+	}
 	else {
  		print "<h1>Stop Screwing Around</h1>";
-	}	
+	}
  	print footer();
-} 
+}
 else {
 	print header();
  	print buildMainScreen();
 	print footer();
 }
- 
- #-----end main------------
- 
+
+#-----end main------------
+
 #------------------------------------------------------
 sub buildMainScreen {
 	opendir(DIR,$outputPath);
@@ -87,7 +87,7 @@ sub buildMainScreen {
 		close $complete;
 		$out .= $percent."% Complete)</form>\n";
 
-	}	
+	}
 	$out .= q|<p><b>NOTE:</b> The RedNeck language is there for demo purposes. You can use it to play around.</p></fieldset>|;
 	$out .= <<STOP;
 	<br>
@@ -101,8 +101,8 @@ sub buildMainScreen {
 	</fieldset>
 STOP
 	return $out;
-} 
- 
+}
+
 #------------------------------------------------------
 sub calculateCompletion {
     local $languageId;
@@ -133,21 +133,21 @@ sub calculateCompletion {
 		open(my $complete, ">", $outputPath."/".$languageId.".complete");
 		print $complete $percent;
 		close $complete;
-	}	
-} 
- 
- #------------------------------------------------------
+	}
+}
+
+#------------------------------------------------------
 
 sub languageIdIsBad {
 	return ($languageId =~ m/English|\s+/ || $languageId !~ m/^[A-Z]/);
 }
 
- #------------------------------------------------------
+#------------------------------------------------------
 sub buildSiteFrames {
 	if (languageIdIsBad()) {
 		return buildMainScreen();
 	}
- 	my $output = ' 
+ 	my $output = '
  <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Frameset//EN"
     "http://www.w3.org/TR/html4/frameset.dtd">
  <html>
@@ -160,8 +160,8 @@ sub buildSiteFrames {
  ';
  	return $output;
  }
- 
- #------------------------------------------------------
+
+#------------------------------------------------------
 sub buildURL {
  	my $op = shift;
  	my $params = shift;
@@ -171,7 +171,7 @@ sub buildURL {
  	}
  	return $url;
 }
- 
+
 #------------------------------------------------------
 sub fixFormData {
     my $value = shift;
@@ -181,12 +181,12 @@ sub fixFormData {
     $value =~ s/\>/\&gt\;/g;
     return $value;
 }
- 
+
 #------------------------------------------------------
 sub footer {
  	return '</body></html>';
 }
- 
+
 #------------------------------------------------------
 sub getLanguage {
  	my $load = $outputPath.'/'.$languageId.'/'.$languageId.'.pm';
@@ -194,13 +194,13 @@ sub getLanguage {
  	if ($@) {
  		writeLanguage();
  		return getLanguage();
- 	} 
+ 	}
 	else {
  		my $cmd = "\$WebGUI::i18n::".$languageId."::LANGUAGE";
  		return eval ($cmd);
  	}
 }
- 
+
 #------------------------------------------------------
 sub getNamespaceItems {
  	my $namespace = shift;
@@ -209,7 +209,7 @@ sub getNamespaceItems {
  	my $load;
  	if ($languageId eq "English") {
  		$load = $webguiPath.'/lib/WebGUI/i18n/English/'.$namespace.'.pm';
- 	} 
+ 	}
 	else {
  		$load = $outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm';
  	}
@@ -217,14 +217,14 @@ sub getNamespaceItems {
  	if ($@ && !$inLoop) {
  		writeNamespace($namespace);
  		return getNamespaceItems($namespace,$languageId, 1);
- 	} 
+ 	}
 	else {
  		my $cmd = "\$WebGUI::i18n::".$languageId."::".$namespace."::I18N";
  		return eval($cmd);
  	}
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub getNamespaces {
     opendir (my $dh, $webguiPath.'/lib/WebGUI/i18n/English/');
     my @files = sort readdir($dh);
@@ -237,60 +237,77 @@ sub getNamespaces {
     }
     return \@namespaces;
 }
- 
- #------------------------------------------------------
+
+#------------------------------------------------------
 sub header {
- my $editor_page;
- $editor_page = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\r\n";
- $editor_page .= "   \"http://www.w3.org/TR/html4/loose.dtd\">\r\n";
- $editor_page .= "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\r\n";
- 
- $editor_page .= qq(<META HTTP-EQUIV="Pragma" CONTENT="no-cache">\r\n);
- $editor_page .= qq(<META HTTP-EQUIV="Cache-Control" CONTENT="no-cache, must-revalidate">\r\n);
- $editor_page .= qq(<META HTTP-EQUIV="Expires" CONTENT="Mon, 26 Jul 1997 05:00:00 GMT">\r\n);
- $editor_page .= qq(<META HTTP-EQUIV="Expires" CONTENT="-1">\r\n);
- 
- $editor_page .= "<style>\r\n";
- $editor_page .= "	th {\r\n";
- $editor_page .= "		text-align: left;\r\n";
- $editor_page .= "		font-weight: bold;\r\n";
- $editor_page .= "		font-size: 85%;\r\n";
- $editor_page .= "		background-color: #f0f0f0;\r\n";
- $editor_page .= "		font-family: sans, helvetica, arial;\r\n";
- $editor_page .= "		white-space: nowrap;\r\n";
- $editor_page .= "	}\r\n";
- $editor_page .= "	.outOfDate {\r\n";
- $editor_page .= "		background-color: #ffff77;\r\n";
- $editor_page .= "		font-weight: bold;\r\n";
- $editor_page .= "	}\r\n";
- $editor_page .= "	.allGood {\r\n";
- $editor_page .= "		background-color: #aaffaa;\r\n";
- $editor_page .= "	}\r\n";
- $editor_page .= "	.undefined {\r\n";
- $editor_page .= "		background-color: #ffaaaa;\r\n";
- $editor_page .= "		font-weight: bold;\r\n";
- $editor_page .= "	}\r\n";
- $editor_page .= "</style>\r\n";
- if (!$editor_on == 1) {
- $editor_page .= "<!-- tinyMCE -->\r\n";
- $editor_page .= "<script language=\"javascript\" type=\"text/javascript\" src=\"$extras_url/tinymce2/jscripts/tiny_mce/tiny_mce.js\"></script>";
- $editor_page .= "<script language=\"javascript\" type=\"text/javascript\">\r\n";
- $editor_page .= "   tinyMCE.init({\r\n";
- $editor_page .= "       mode : \"specific_textareas\",\r\n";
- $editor_page .= "    	theme : \"advanced\",\r\n";
- $editor_page .= "       theme_advanced_disable : \"help,image\",\r\n";
- $editor_page .= "      language : \"$editor_lang\",\r\n";
- $editor_page .= "    content_css : \"/site.css\",\r\n";
- $editor_page .= "	auto_reset_designmode : \"true\"\r\n";
- $editor_page .= "   })\;\r\n";
- $editor_page .= "</script>\r\n";
- $editor_page .= "<!-- /tinyMCE -->\r\n";
- }
- $editor_page .= "</head><body>";
+ my $editor_page =<<EOHEADER;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+<META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+<META HTTP-EQUIV="Cache-Control" CONTENT="no-cache, must-revalidate">
+<META HTTP-EQUIV="Expires" CONTENT="Mon, 26 Jul 1997 05:00:00 GMT">
+<META HTTP-EQUIV="Expires" CONTENT="-1">
+
+<style>
+	th {
+		text-align: left;
+		font-weight: bold;
+		font-size: 85%;
+		background-color: #f0f0f0;
+		font-family: sans, helvetica, arial;
+		white-space: nowrap;
+	}
+	.outOfDate {
+		background-color: #ffff77;
+		font-weight: bold;
+	}
+	.allGood {
+		background-color: #aaffaa;
+	}
+	.undefined {
+		background-color: #ffaaaa;
+		font-weight: bold;
+	}
+    .editItemRow div {
+        padding-top: 2px;
+        padding-bottom: 2px;
+        padding-right: 2px;
+    }
+    .editItemRow label {
+        float: left;
+        width: 15%;
+		text-align: left;
+		font-weight: bold;
+		background-color: #f0f0f0;
+		font-family: sans, helvetica, arial;
+    }
+    .editItemRow span {
+        float: right;
+        width: 80%;
+    }
+    .editItemRow span span {
+        float: none;
+        width: auto;
+    }
+</style>
+<!-- YUI Simple Editor -->
+<!-- Skin CSS file -->
+<link rel="stylesheet" type="text/css" href="$extras_url/yui/build/assets/skins/sam/skin.css">
+<!-- Utility Dependencies -->
+<script type="text/javascript" src="$extras_url/yui/build/yahoo-dom-event/yahoo-dom-event.js"></script>
+<script type="text/javascript" src="$extras_url/yui/build/element/element-beta.js"></script>
+<!-- Needed for Menus, Buttons and Overlays used in the Toolbar -->
+<script src="$extras_url/yui/build/container/container_core-min.js"></script>
+<script src="$extras_url/yui/build/button/button-min.js"></script>
+<!-- Source file for Rich Text Editor-->
+<script src="$extras_url/yui/build/editor/simpleeditor-min.js"></script>
+</head><body>
+EOHEADER
  	return $editor_page;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub preview {
  	my $text = shift || "not yet defined";
  	$text = substr($text,0,50);
@@ -298,9 +315,9 @@ sub preview {
  	$text =~ s/\</&lt;/g;
  	$text =~ s/\>/&gt;/g;
  	return $text;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub setLanguage {
  	my $label = shift;
  	my $toolbar = shift;
@@ -317,14 +334,13 @@ sub setLanguage {
         locale                  => $locale,
     });
  	writeLanguage($output, $translit);
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub setNamespaceItems {
  	my $namespace = shift;
  	my $tag = shift;
  	my $message = shift;
- 	my $eng = getNamespaceItems($namespace);
  	my $lang = getNamespaceItems($namespace,$languageId);
  	$lang->{$tag}{message} = $message;
  	$lang->{$tag}{lastUpdated} = time();
@@ -332,11 +348,12 @@ sub setNamespaceItems {
     local $Data::Dumper::Terse = 1;
     local $Data::Dumper::Sortkeys = 1;
     local $Data::Dumper::Indent = 1;
+    local $Data::Dumper::Useqq = 1;
     my $output = Dumper($lang);
  	writeNamespace($namespace,$output);
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub writeFile {
     my $filepath = shift;
     my $content = shift;
@@ -357,8 +374,8 @@ sub writeFile {
         exit;
     }
 }
- 
- #------------------------------------------------------
+
+#------------------------------------------------------
 sub writeLanguage {
     my $data = shift || '{}';
 	my $translit_replaces_r = shift;
@@ -368,9 +385,9 @@ sub writeLanguage {
     $output .= "our \$LANGUAGE = ";
     $output .= $data;
     $output .= ";\n\n";
- 
+
  $translit_replaces_r =~ s/\r//g; # For ***nix OS
- 
+
     $output .= qq(sub makeUrlCompliant {
     my \$value = shift;\n);
  $output .= "##<-- start transliteration -->##\n".$translit_replaces_r."\n##<-- end transliteration -->##\n";
@@ -387,9 +404,9 @@ sub writeLanguage {
 END_TRANSLIT
  	$output .= "\n\n1;\n";
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'.pm', $output);
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub writeNamespace {
  	my $namespace = shift;
  	my $data = shift || '{}';
@@ -398,8 +415,8 @@ sub writeNamespace {
  	$output .= $data;
  	$output .= ";\n\n1;\n";
  	writeFile($outputPath.'/'.$languageId.'/'.$languageId.'/'.$namespace.'.pm', $output);
- }
- 
+}
+
 #------------------------------------------------------
 sub www_commitTranslation {
 	if (languageIdIsBad()) {
@@ -452,45 +469,157 @@ sub www_displayMenu {
  	}
 	$output .= '</table>';
  	return $output;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub www_editItem {
- 	my $eng = getNamespaceItems($cgi->param("namespace"));
- 	my $lang = getNamespaceItems($cgi->param("namespace"),$languageId);
- 
- 	my $output = '<table width="95%"><form name="editor_on"><tr><th>Visual editor</th><td><input type="radio" name="editor_on" value="0"';
- if (!$editor_on == 1) {$output .= ' checked';} else {$output .= " onClick=\"window.location.href='".buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$cgi->param("tag"),is_editor_on=>'0'})."'\"";}
- 	$output .= '>&nbsp;On&nbsp;&nbsp;/&nbsp;<input type="radio" name="editor_on" value="1"';
- if ($editor_on == 1) {$output .= ' checked';} else {$output .= " onClick=\"window.location.href='".buildURL("editItem",{namespace=>$cgi->param("namespace"),tag=>$cgi->param("tag"),is_editor_on=>'1'})."'\"";}
- 	$output .= '>&nbsp;Off&nbsp;</td></tr></form>';
- 	$output .= '<form method="post" action="/#'.$cgi->param("tag").'">';
- 	$output .= '<tr><th>Namespace</th><td>'.$cgi->param("namespace").'</td></tr>';
- 	$output .= '<input type="hidden" name="languageId" value="'.$languageId.'">';
- 	$output .= '<input type="hidden" name="namespace" value="'.$cgi->param("namespace").'">';
- 	$output .= '<tr><th>Tag</th><td>'.$cgi->param("tag").'</td></tr>';
- 	$output .= '<input type="hidden" name="tag" value="'.$cgi->param("tag").'">';
- 	$output .= '<input type="hidden" name="op" value="editItemSave">';
- 	$output .= '<tr><th valign="top">Message</td><td width="95%"><textarea style="width: 100%" rows="10" name="message" mce_editable="true">'.fixFormData($lang->{$cgi->param("tag")}{message}).'</textarea></td></tr>';
- 	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
- 	$output .= '<tr><th valign="top">Original Message</th><td>'.$eng->{$cgi->param("tag")}{message}.'</td></tr>';
- 	$output .= '<tr><th valign="top">Message Context Info</th><td>'.$eng->{$cgi->param("tag")}{context}.'</td></tr>' if ($eng->{$cgi->param("tag")}{context});
- 	$output .= qq(</form></table>);
+    my $namespace   = $cgi->param('namespace');
+ 	my $eng = getNamespaceItems($namespace);
+ 	my $lang = getNamespaceItems($namespace,$languageId);
+    my $tag         = $cgi->param('tag');
+    my $message     = fixFormData($lang->{$tag}{message});
+    my $origMessage = $eng->{$tag}{message};
+    my $origContext = $eng->{$tag}{context};
+    my $editorBoolean = $editor_on ? 'true' : 'false';
+    my $output =<<EOFORM;
+<div class="yui-skin-sam">
+<form id="editForm" name="editForm" method="post" action="/#$tag">
+<input type="hidden" name="languageId" value="$languageId">
+<input type="hidden" name="namespace" value="$namespace">
+<input type="hidden" name="tag" value="$tag">
+<input type="hidden" name="op" value="editItemSave">
+<input type="hidden" name="is_editor_on" id="is_editor_on" value="$editor_on">
+<fieldset class="editItemRow">
+<legend>Translate Item</legend>
+<div>
+<label></label>
+<span><button type="button" id="toggleEditor">Toggle Editor</button></span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Namespace</label>
+<span>$namespace</span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Namespace</label>
+<span>$namespace</span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Tag</label>
+<span>$tag</span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Message</label>
+<span><textarea style="width: 100%" rows="10" name="message" id="message">$message</textarea></span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label></label>
+<span><input type="submit" name="saveMessage" id="saveMessage" value="Save" />
+</span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Original Message</label>
+<span>$origMessage</span>
+<div style="clear: both;"></div>
+</div>
+<div>
+<label>Context Info</label>
+<span>$origContext</span>
+<div style="clear: both;"></div>
+</div>
+</form>
+</fieldset>
+</form>
+<script type="text/javascript">
+(function() {
+    var Dom = YAHOO.util.Dom,
+        Event = YAHOO.util.Event;
+
+    var _toggleButton = new YAHOO.widget.Button('toggleEditor');
+
+    var myConfig = {
+        handleSubmit: true,
+        height: '200px',
+        width: '650px',
+        animate: true,
+        dompath: true,
+        focusAtStart: true
+    };
+
+    var myEditor = new YAHOO.widget.SimpleEditor('message', myConfig);
+    myEditor._render(); //Draw it right now, otherwise we can't hide it right away.
+
+    var formToggle = document.getElementById('is_editor_on');
+
+    var toggleState = $editorBoolean;
+    handleEditorDraw(toggleState);
+
+    _toggleButton.on('click', function(ev) {
+        Event.stopEvent(ev);
+        if (toggleState) {
+            toggleState = false;
+            formToggle.value = 0;
+        }
+        else {
+            toggleState = true;
+            formToggle.value = 1;
+        }
+        handleEditorDraw(toggleState);
+    });
+
+    function handleEditorDraw (myState) {
+        if (myState) { //Draw it
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'position', 'static');
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'top', '0');
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'left', '0');
+            Dom.setStyle(myEditor.get('element'), 'visibility', 'hidden');
+            Dom.setStyle(myEditor.get('element'), 'top', '-9999px');
+            Dom.setStyle(myEditor.get('element'), 'left', '-9999px');
+            Dom.setStyle(myEditor.get('element'), 'position', 'absolute');
+            myEditor.get('element_cont').addClass('yui-editor-container');
+            myEditor._setDesignMode('on');
+            myEditor.setEditorHTML(myEditor.get('textarea').value);
+            myEditor.show;
+        }
+        else { //Hide it
+            myEditor.saveHTML();
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'position', 'absolute');
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'top', '-9999px');
+            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'left', '-9999px');
+            myEditor.get('element_cont').removeClass('yui-editor-container');
+            Dom.setStyle(myEditor.get('element'), 'visibility', 'visible');
+            Dom.setStyle(myEditor.get('element'), 'top', '');
+            Dom.setStyle(myEditor.get('element'), 'left', '');
+            Dom.setStyle(myEditor.get('element'), 'position', 'static');
+            myEditor.hide;
+        }
+    }
+
+})();
+</script>
+</div>
+EOFORM
  	return $output;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub www_editItemSave {
+    warn "saving message:<".$cgi->param("message").">\n";
     my $english = getNamespaces();
     my $namespace = $cgi->param("namespace");
     my %namespaces = map { $_ => 1 } @{ $english };
     if (exists $namespaces{$namespace}) {
         setNamespaceItems($namespace,$cgi->param("tag"),decode_utf8($cgi->param("message")));
     }
-    return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
- }
- 
- #------------------------------------------------------
+ 	return '<script type="text/javascript">parent.frames[0].location.reload();</script>Message saved.<p />'.www_listItemsInNamespace();
+}
+
+#------------------------------------------------------
 sub www_editLanguage {
 	if (languageIdIsBad()) {
 		return '';
@@ -523,14 +652,14 @@ END_TRANSLIT
  	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
  	$output .= '</table></form>';
  	return $output;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub www_editLanguageSave {
     setLanguage(decode_utf8($cgi->param("label")), $cgi->param("toolbar"), decode_utf8($cgi->param("translit_replaces")), $cgi->param("languageAbbreviation"), $cgi->param("locale"));
 	calculateCompletion();
  	return "Language saved.<p>".www_editLanguage();
- }
+}
 
 #------------------------------------------------------
 sub www_exportTranslation {
@@ -543,9 +672,9 @@ sub www_exportTranslation {
 	return '<a href="/translations/'.$languageId.'.tar.gz">Download '.$languageId.'.tar.gz</a>';
 }
 
- 
- #------------------------------------------------------
-sub www_listItemsInNamespace {	
+
+#------------------------------------------------------
+sub www_listItemsInNamespace {
  	my $eng = getNamespaceItems($cgi->param("namespace"));
  	my $lang = getNamespaceItems($cgi->param("namespace"),$languageId);
  	my $output = '<table width="95%">';
@@ -573,11 +702,11 @@ sub www_listItemsInNamespace {
  		$output .= '</td></tr>';
  	}
  	$output .= '</table>';
-	$output = 'Status: '.sprintf('%.4f',(($total - $ood) / $total)*100).'% ('.($total - $ood).' / '.$total.') Complete  <br />'.$output; 
+	$output = 'Status: '.sprintf('%.4f',(($total - $ood) / $total)*100).'% ('.($total - $ood).' / '.$total.') Complete  <br />'.$output;
  	return $output;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub www_translatorsNotes {
     open (my $notesFile, "<:utf8", $outputPath.'/'.$languageId.'/notes.txt');
     my $notes = do { local $/; <$notesFile> };
@@ -589,15 +718,15 @@ sub www_translatorsNotes {
  	$output .= '<tr><th></th><td><input type="submit" value="Save"></td></tr>';
  	$output .= '</table></form>';
  	return $output;
- }
- 
- #------------------------------------------------------
+}
+
+#------------------------------------------------------
 sub www_translatorsNotesSave {
 	open(my $notesFile, ">:utf8", $outputPath.'/'.$languageId.'/notes.txt');
 	print {$notesFile} decode_utf8($cgi->param("notes"))."\n";
 	close($notesFile);
  	return "Notes saved.<p>".www_translatorsNotes();
- }
+}
 
 #------------------------------------------------------
 sub ReadTranslit {
