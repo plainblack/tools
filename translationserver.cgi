@@ -327,6 +327,7 @@ sub setLanguage {
     local $Data::Dumper::Terse = 1;
     local $Data::Dumper::Sortkeys = 1;
     local $Data::Dumper::Indent = 1;
+    local $Data::Dumper::Useperl  = 1;
     my $output = Dumper({
         label                   => $label,
         toolbar                 => $toolbar,
@@ -345,10 +346,10 @@ sub setNamespaceItems {
  	$lang->{$tag}{message} = $message;
  	$lang->{$tag}{lastUpdated} = time();
     # Get rid of $VAR1 prefix
-    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::Terse    = 1;
     local $Data::Dumper::Sortkeys = 1;
-    local $Data::Dumper::Indent = 1;
-    local $Data::Dumper::Useqq = 1;
+    local $Data::Dumper::Indent   = 1;
+    local $Data::Dumper::Useperl  = 1;
     my $output = Dumper($lang);
  	writeNamespace($namespace,$output);
 }
