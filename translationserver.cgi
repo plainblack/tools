@@ -558,13 +558,9 @@ sub www_editItem {
         focusAtStart: true
     };
 
-    var myEditor = new YAHOO.widget.SimpleEditor('message', myConfig);
-    myEditor._render(); //Draw it right now, otherwise we can't hide it right away.
-
     var formToggle = document.getElementById('is_editor_on');
 
     var toggleState = $editorBoolean;
-    handleEditorDraw(toggleState);
 
     _toggleButton.on('click', function(ev) {
         Event.stopEvent(ev);
@@ -581,31 +577,44 @@ sub www_editItem {
 
     function handleEditorDraw (myState) {
         if (myState) { //Draw it
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'position', 'static');
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'top', '0');
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'left', '0');
-            Dom.setStyle(myEditor.get('element'), 'visibility', 'hidden');
-            Dom.setStyle(myEditor.get('element'), 'top', '-9999px');
-            Dom.setStyle(myEditor.get('element'), 'left', '-9999px');
-            Dom.setStyle(myEditor.get('element'), 'position', 'absolute');
+            myEditor.show();
+            var fc = myEditor.get('element').previousSibling,
+                el = myEditor.get('element');
+            Dom.setStyle(fc, 'position', 'static');
+            Dom.setStyle(fc, 'top', '0');
+            Dom.setStyle(fc, 'left', '0');
+            Dom.setStyle(el, 'visibility', 'hidden');
+            Dom.setStyle(el, 'top', '-9999px');
+            Dom.setStyle(el, 'left', '-9999px');
+            Dom.setStyle(el, 'position', 'absolute');
             myEditor.get('element_cont').addClass('yui-editor-container');
             myEditor._setDesignMode('on');
             myEditor.setEditorHTML(myEditor.get('textarea').value);
-            myEditor.show;
         }
         else { //Hide it
+            myEditor.hide();
             myEditor.saveHTML();
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'position', 'absolute');
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'top', '-9999px');
-            Dom.setStyle(myEditor.get('element_cont').get('firstChild'), 'left', '-9999px');
+            var fc = myEditor.get('element').previousSibling,
+                el = myEditor.get('element');
+            Dom.setStyle(fc, 'position', 'absolute');
+            Dom.setStyle(fc, 'top', '-9999px');
+            Dom.setStyle(fc, 'left', '-9999px');
             myEditor.get('element_cont').removeClass('yui-editor-container');
-            Dom.setStyle(myEditor.get('element'), 'visibility', 'visible');
-            Dom.setStyle(myEditor.get('element'), 'top', '');
-            Dom.setStyle(myEditor.get('element'), 'left', '');
-            Dom.setStyle(myEditor.get('element'), 'position', 'static');
-            myEditor.hide;
+            Dom.setStyle(el, 'visibility', 'visible');
+            Dom.setStyle(el, 'top', '');
+            Dom.setStyle(el, 'left', '');
+            Dom.setStyle(el, 'position', 'static');
         }
     }
+
+    var messageText = Dom.get('message').value;
+    var myEditor = new YAHOO.widget.SimpleEditor('message', myConfig);
+    myEditor.on('afterRender', function () {
+        handleEditorDraw(toggleState);
+        // the process of rendering and disabling the editor happens before it loads the text, so restore it here
+        Dom.get('message').value = messageText;
+    } );
+    myEditor.render();
 
 })();
 </script>
