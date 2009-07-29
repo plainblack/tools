@@ -574,48 +574,22 @@ sub www_editItem {
         }
         handleEditorDraw(toggleState);
     });
-
+    var myEditor;
     function handleEditorDraw (myState) {
         if (myState) { //Draw it
-            myEditor.show();
-            var fc = myEditor.get('element').previousSibling,
-                el = myEditor.get('element');
-            Dom.setStyle(fc, 'position', 'static');
-            Dom.setStyle(fc, 'top', '0');
-            Dom.setStyle(fc, 'left', '0');
-            Dom.setStyle(el, 'visibility', 'hidden');
-            Dom.setStyle(el, 'top', '-9999px');
-            Dom.setStyle(el, 'left', '-9999px');
-            Dom.setStyle(el, 'position', 'absolute');
-            myEditor.get('element_cont').addClass('yui-editor-container');
-            myEditor._setDesignMode('on');
-            myEditor.setEditorHTML(myEditor.get('textarea').value);
+            if (! myEditor) {
+                myEditor = new YAHOO.widget.SimpleEditor('message', myConfig);
+                myEditor.render();
+            }
         }
         else { //Hide it
-            myEditor.hide();
-            myEditor.saveHTML();
-            var fc = myEditor.get('element').previousSibling,
-                el = myEditor.get('element');
-            Dom.setStyle(fc, 'position', 'absolute');
-            Dom.setStyle(fc, 'top', '-9999px');
-            Dom.setStyle(fc, 'left', '-9999px');
-            myEditor.get('element_cont').removeClass('yui-editor-container');
-            Dom.setStyle(el, 'visibility', 'visible');
-            Dom.setStyle(el, 'top', '');
-            Dom.setStyle(el, 'left', '');
-            Dom.setStyle(el, 'position', 'static');
+            if (myEditor) {
+                myEditor.destroy();
+                myEditor = null;
+            }
         }
     }
-
-    var messageText = Dom.get('message').value;
-    var myEditor = new YAHOO.widget.SimpleEditor('message', myConfig);
-    myEditor.on('afterRender', function () {
-        handleEditorDraw(toggleState);
-        // the process of rendering and disabling the editor happens before it loads the text, so restore it here
-        Dom.get('message').value = messageText;
-    } );
-    myEditor.render();
-
+    handleEditorDraw(toggleState);
 })();
 </script>
 </div>
