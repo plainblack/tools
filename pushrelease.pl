@@ -61,7 +61,10 @@ sub publishToPb {
 }
 
 sub publishToSf {
-	print "Publishing version ".$version." to the Source Forge FTP server.\n";
-	system('/usr/bin/lftp -e "put -O incoming '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u anonymous,nopass ftp://upload.sf.net');
+	print "Publishing version ".$version." to the Source Forge FTP server.\n\nUsername:";
+	my $username = <>;
+	chomp $username;
+	return unless $username;
+	system('lftp -e "put -O uploads '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u ' . $username . ' sftp://frs.sf.net');
 }
 
