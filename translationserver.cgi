@@ -443,7 +443,7 @@ sub www_commitTranslation {
             system("cd $outputPath;/usr/bin/svn --accept mine-full resolve $file");         
         }
 	}
-	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn commit -m 'Update from translation server' --username $svn_user --password $svn_pass --no-auth-cache --non-interactive $languageId`.'</pre>';
+	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn commit -m 'Updating $languageId on translation server' --username $svn_user --password $svn_pass --no-auth-cache --non-interactive $languageId`.'</pre>';
 }
 
 #------------------------------------------------------
