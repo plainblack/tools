@@ -116,8 +116,8 @@ sub calculateCompletion {
 		$languageId = $file;
 
 		# calc percentages of completion
-               	my $total = 0;
-               	my $ood = 0;
+        my $total = 0;
+        my $ood = 0;
  		my $namespaces = getNamespaces();
         	foreach my $namespace (@{$namespaces}) {
                 	my $eng = getNamespaceItems($namespace);
@@ -129,7 +129,10 @@ sub calculateCompletion {
                         	}
                 	}
         	}
-               	my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
+        my $percent = ($total > 0) ? sprintf('%.1f',(($total - $ood) / $total)*100) : 0;
+        if ($ood && $ood < $total/1000) {
+            $percent = '99.9';
+        }
 		open(my $complete, ">", $outputPath."/".$languageId.".complete");
 		print $complete $percent;
 		close $complete;
