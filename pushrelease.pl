@@ -5,7 +5,7 @@ use File::Path;
 
 our $version = "";
 our $buildDir = "/data/builds";
-our $branch = "";
+our $branch = "master";
 
 GetOptions(
 	'version=s'=>\$version,
@@ -33,14 +33,27 @@ if ($version ne "") {
 STOP
 }
 
+#sub createTag {
+#	print "Creating a release tag for ".$version." in subversion.\n";
+#	if ($branch) {
+#		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/branch/'.$branch.' https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+#	}
+#	else {
+#		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/WebGUI https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
+#	}
+#}
+
 sub createTag {
-	print "Creating a release tag for ".$version." in subversion.\n";
-	if ($branch) {
-		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/branch/'.$branch.' https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
-	}
-	else {
-		system('svn copy -m "Release '.$version.'" https://svn.webgui.org/plainblack/WebGUI https://svn.webgui.org/plainblack/releases/WebGUI_'.$version);
-	}
+	print "Creating a release tag for ".$version." in git.\n";
+	my $tag_name = $version;
+	$tag_name =~ s/-\w+$//;
+	system <<"EOCMD";
+cd /data/git/webgui;       \
+git checkout $branch;      \
+git pull;                  \
+git tag v$tag_name;        \
+git push origin v$tag_name
+EOCMD
 }
 
 sub publishToPb {
@@ -60,8 +73,30 @@ sub publishToPb {
 	close(FILE);
 }
 
+#sub publishToSf {
+#	print "Publishing version ".$version." to the Source Forge FTP server.\n\nUsername:";
+#	my $username = <>;
+#	chomp $username;
+#	return unless $username;
+#	my ($number, $status) = split /-/, $version;
+#	my $new_dir = sprintf "%s (%s)", $number, $status;
+#	system('lftp -e "cd /home/pfs/project/p/pb/pbwebgui/WebGUI Source; mkdir '.$new_dir.'; cd '.$new_dir.'; put -O uploads '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" sftp://'.$username.',pbwebgui@frs.sf.net');
+#}
+
 sub publishToSf {
-	print "Publishing version ".$version." to the Source Forge FTP server.\n";
-	system('/usr/bin/lftp -e "put -O incoming '.$buildDir.'/'.$version.'/webgui-'.$version.'.tar.gz; exit" -u anonymous,nopass ftp://upload.sf.net');
+	print "Publishing version ".$version." to the Source Forge FTP server.\n\nUsername:";
+	my $username = <>;
+	chomp $username;
+	return unless $username;
+	my ($number, $status) = split /-/, $version;
+	my $new_dir = sprintf "%s\\ (%s)", $number, $status;
+	open my $SFTP, "| sftp $username,pbwebgui\@frs.sf.net" or
+		die "Unable to open pipe to sftp: $!";
+	print $SFTP "cd /home/pfs/project/p/pb/pbwebgui/WebGUI\\ Source\n";
+	print $SFTP "mkdir $new_dir\n";
+	print $SFTP "chdir $new_dir\n";
+	print $SFTP "put $buildDir/$version/webgui-$version.tar.gz webgui-$version.tar.gz\n";
+	print $SFTP "exit";
+	close $SFTP;
 }
 

@@ -446,6 +446,7 @@ sub www_commitTranslation {
             system("cd $outputPath;/usr/bin/svn --accept mine-full resolve $file");         
         }
 	}
+	print "Preparing to commit local changes<br />\n";
 	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn commit -m 'Updating $languageId on translation server' --username $svn_user --password $svn_pass --no-auth-cache --non-interactive $languageId`.'</pre>';
 }
 
