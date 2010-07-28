@@ -89,14 +89,14 @@ sub publishToSf {
 	chomp $username;
 	return unless $username;
 	my ($number, $status) = split /-/, $version;
-	my $new_dir = sprintf "%s\\ (%s)", $number, $status;
+	my $new_dir = sprintf "%s (%s)", $number, $status;
 	open my $SFTP, "| sftp $username,pbwebgui\@frs.sf.net" or
 		die "Unable to open pipe to sftp: $!";
-	print $SFTP "cd /home/pfs/project/p/pb/pbwebgui/WebGUI\\ Source\n";
-	print $SFTP "mkdir $new_dir\n";
-	print $SFTP "chdir $new_dir\n";
-	print $SFTP "put $buildDir/$version/webgui-$version.tar.gz webgui-$version.tar.gz\n";
-	print $SFTP "exit";
+	print $SFTP qq|cd "/home/pfs/project/p/pb/pbwebgui/WebGUI Source"\n|;
+	print $SFTP qq|mkdir "$new_dir"\n|;
+	print $SFTP qq|chdir "$new_dir"\n|;
+	print $SFTP qq|put $buildDir/$version/webgui-$version.tar.gz webgui-$version.tar.gz\n|;
+	print $SFTP qq|exit|;
 	close $SFTP;
 }
 
