@@ -14,7 +14,7 @@ GetOptions(
 	);
 
 
-if ($version ne "") {
+if ($version ne "" && $version =~ /-(?:stable|beta)$/) {
 	createTag();
 	publishToPb();
 	publishToSf();
@@ -28,7 +28,7 @@ if ($version ne "") {
 
 	--buildDir		The base directory to create all builds in. Defaults to /data/builds.
 
-	--version		The build version. Used to create folders and filenames.
+	--version		The build version. Used to create folders and filenames.  Must include a -beta or -stable suffix.
 
 STOP
 }
