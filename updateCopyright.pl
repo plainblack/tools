@@ -16,7 +16,7 @@ sub replaceCopyright {
 		print "Processing ".$File::Find::name."\n";
 		my $file = readFile($File::Find::name);
 #print $file;
-		$file =~ s/Copyright\s+2001-20\d\d\s+Plain\s+Black/Copyright 2001-2008 Plain Black/ixsg;
+		$file =~ s/Copyright\s+2001-20\d\d\s+Plain\s+Black/Copyright 2001-2011 Plain Black/ixsg;
 #print "\n/////////////////////\n";
 #print $file;
 		writeFile($File::Find::name,$file);
