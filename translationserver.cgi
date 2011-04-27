@@ -18,8 +18,6 @@ my $wgi18neditRoot = "/data/domains/translation.webgui.org/";
  our $webguiPath = $config->get("webguiPath");
  our $editor_lang = $config->get("editor_lang");
  our $extras_url = $config->get("extras_url");
- our $svn_user = $config->get("svn_user");
- our $svn_pass = $config->get("svn_pass");
 
  binmode(STDOUT, ":utf8");
 
@@ -32,6 +30,8 @@ if ($ARGV[0] eq "--calculate") {
 
 our $cgi = CGI->new;
 our $languageId = $cgi->param("languageId");
+##Sanitize the languageId, english ASCII only
+$languageId =~ tr/a-zA-Z_0-9//dc;
 
 our $editor_on;
 
@@ -428,26 +428,35 @@ sub www_commitTranslation {
 	}
 	calculateCompletion();
 	chdir($outputPath);
-	my $out = `cd $outputPath;/usr/bin/svn --non-interactive update $languageId`;
-	my $rawChanges = `cd $outputPath;/usr/bin/svn status $languageId`;
+    ##Merge in outside changes, preferring our version for all conflicts
+	my $rawChanges = `git status --porcelain $languageId`;
 	my @changes = split m{\n}, $rawChanges;
-	foreach my $change (@changes) {
-		my ($type, $file) = split m{\s+}, $change;
-		if (($type eq "?") && ($file !~ m{\.r.*$}) ) {
-			print "Adding ".$file."<br />";
-			system("cd $outputPath;/usr/bin/svn add $file");
+	CHANGE: foreach my $change (@changes) {
+        ##Fixed width parse, 2 character, 1 space, then all characters
+        print "change: $change<br />\n";
+		my ($type, undef, $file) = unpack "A2AA*", $change;
+        next CHANGE if $file =~ /\.complete$/;
+		if (($type eq "??") && ($file !~ m{\.r.*$}) ) {
+			print "Adding ".$file."<br />\n";
+			system("git add $file");
 		}
-        elsif ($type eq "M") {
-			print "Updating ".$file."<br />";
+        elsif ($type eq " M") {
+			print "Updating ".$file."<br />\n";
 		}
-        elsif ($type eq "C") {
-            # Resolve any conflicts by overriding changes on the server by the local version
-            print "Resolving conflict in ".$file."<br />";
-            system("cd $outputPath;/usr/bin/svn --accept mine-full resolve $file");         
-        }
+#        elsif ($type eq "C") {
+#            # Resolve any conflicts by overriding changes on the server by the local version
+#            print "Resolving conflict in ".$file."<br />";
+#            system("/usr/bin/svn --accept mine-full resolve $file");
+#        }
 	}
 	print "Preparing to commit local changes<br />\n";
-	return '<br /><pre>'.`cd $outputPath;/usr/bin/svn commit -m 'Updating $languageId on translation server' --username $svn_user --password $svn_pass --no-auth-cache --non-interactive $languageId`.'</pre>';
+    my $out;
+	$out = `git commit -m 'Updating $languageId on translation server' $languageId;`;
+	$out .= `git fetch origin`;
+	$out .= `git merge -s recursive -X ours origin`;
+	$out .= `git push`;
+
+	return '<br /><pre>'.$out.'</pre>';
 }
 
 #------------------------------------------------------
