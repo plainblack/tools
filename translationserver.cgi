@@ -469,7 +469,7 @@ sub www_displayMenu {
 		'.$languageId.'<br />
 		&bull; <a href="'.buildURL("editLanguage").'" target="editor">Edit</a><br />
 		&bull; <a href="'.buildURL("exportTranslation").'" target="editor">Export</a><br />
-		&bull; <a href="'.buildURL("commitTranslation").'" target="editor">Commit to SVN</a><br />
+		&bull; <a href="'.buildURL("commitTranslation").'" target="editor">Commit</a><br />
 		&bull; <a href="'.buildURL("translatorsNotes").'" target="editor">Translators Notes</a><br />
 		<br /><table>';
  	my $namespaces = getNamespaces();
