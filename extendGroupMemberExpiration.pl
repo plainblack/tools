@@ -27,6 +27,7 @@ our ($configFile, $help, $man);
 use Pod::Usage;
 use Getopt::Long;
 use WebGUI::Session;
+use WebGUI::Group;
 
 # Get parameters here, including $help
 GetOptions(
